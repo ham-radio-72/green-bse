@@ -1,6 +1,6 @@
 # BSE@scGW
 
-![image.png](/Users/wenming/green_bse/BSE_diagram.png)
+![image.png](BSE_diagram.png)
 
 # The pristine form
 
