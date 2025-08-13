@@ -6,7 +6,7 @@
 #                                                                             #
 
 
-from ir import IR_factory,read_IR_matrices
+from irFT import IR_factory,read_IR_matrices
 import h5py
 import numpy as np
 from scipy.linalg import inv, eigvals

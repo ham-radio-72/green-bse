@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 import scipy.linalg as LA
-from ir import IR_factory,read_IR_matrices
+from irFT import IR_factory,read_IR_matrices
 import gwtool as gw
 import time
 import math
