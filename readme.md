@@ -1,7 +1,5 @@
 # BSE@scGW
 
-![image.png](BSE_diagram.png)
-
 # The pristine form
 
 $$
