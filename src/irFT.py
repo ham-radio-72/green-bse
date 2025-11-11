@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #                                                                                     #
 #    Copyright (c) 2023 Gaurav Harsha <gharsha@umich.edu>, University of Michigan.    #
 #                                                                                     #
@@ -177,3 +178,34 @@ def read_IR_matrices(ir_path, beta, ptype='fermi'):
     Tcn = np.linalg.inv(Tnc)
 
     return tau_mesh, wsample, Ttc, Tcn, Tnc, Tct
+
+
+def tau2omegaFT(tau, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    print("Performing Fourier transformation from img time to img freq...")
+    fourier = IR_factory(beta, tau_h5)
+    omega = fourier.tauf_to_wb(tau)
+    
+    return omega
+
+
+def tau2omegaFTforG(tau, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    # For G or any Fermionic quantity.
+    print("Performing Fourier transformation from img time to img freq...")
+    fourier = IR_factory(beta, tau_h5)
+    omega = fourier.tau_to_w(tau)
+    
+    return omega
+
+def omega2tauFT(omega, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    print("Performing Fourier transformation from img freq to img time...")
+    fourier = IR_factory(beta, tau_h5)
+    tau = fourier.wb_to_tauf(omega)
+    
+    return tau
+
+def omega2tauFTforG(omega, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    print("Performing Fourier transformation from img freq to img time...")
+    fourier = IR_factory(beta, tau_h5)
+    tau = fourier.w_to_tau(omega)
+    
+    return tau

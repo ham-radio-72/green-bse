@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+#                                                                             #
+#    Copyright (c) 2025 Ming Wen <wenm@umich.edu>, University of Michigan.    #
+#                                                                             #
+#    Functions used for orthogonalizing tensors.                              #
+#                                                                             #
+
+
 import scipy.linalg as LA
 import numpy as np
 
