@@ -13,7 +13,6 @@ sys.path.append('/home/wenm/green-bse/src')
 from bse import create_argument_parser, BSESolver, BSEConfig
 
 def main():
-    """Main entry point."""
     parser = create_argument_parser()
     args = parser.parse_args()
     

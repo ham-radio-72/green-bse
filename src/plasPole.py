@@ -12,7 +12,6 @@ from scipy.optimize import least_squares
 
 AU2EV = 27.2114  # Hartree to eV conversion factor
 
-
 def plasmon_model(z, Finf, S, wp):
     """Single plasmon-pole model for F(z)."""
     return Finf + 2 * wp * S / (wp**2 - z**2)
@@ -22,27 +21,13 @@ def fit_plasmon_pole(Omega, Fdata, F0=None, Finf=None):
     """
     Fit F(iOmega) data to a single plasmon-pole model:
         F(z) = Finf + S / (wp^2 - z^2).
-        
-    Parameters:
-    -----------
-    Omega : np.ndarray
-        Frequency grid
-    Fdata : np.ndarray
-        F(iOmega) data to fit
-    F0 : float, optional
-        Value at zero frequency
-    Finf : float, optional
-        Value at infinite frequency
-        
-    Returns:
-    --------
-    dict
-        Fitted parameters and residual norm
     """
     z = 1j * Omega
 
     # Weights: downweight high-frequency points
+    # Frequencies near zero imaginaries (iΩ = 0) are more important
     w = 1.0 / (1.0 + Omega**2)
+    # Initial guess for wp
     wp0 = 0.001
 
     def residuals(params):
@@ -55,6 +40,8 @@ def fit_plasmon_pole(Omega, Fdata, F0=None, Finf=None):
         diff = Fdata - model_vals
         # Weighted residuals, stack real+imag parts
         res = np.concatenate([(w * diff.real), (w * diff.imag)])
+        # non-weighted residuals, stack real+imag parts
+        # res = np.concatenate([(diff.real), (diff.imag)])
         return res
 
     # Initial guesses
@@ -63,10 +50,12 @@ def fit_plasmon_pole(Omega, Fdata, F0=None, Finf=None):
         S0 = (Fdata[0].real - Finf0) * 1.0
         x0 = [Finf0, S0, wp0]
         bounds = ([-np.inf, -np.inf, 1e-8], [np.inf, np.inf, np.inf])
+        # bounds = ([-np.inf, 1e-8, -np.inf], [np.inf, np.inf, np.inf])
     else:
         S0 = (F0 - Finf) * 1.0
         x0 = [S0, wp0]
         bounds = ([-np.inf, 1e-8], [np.inf, np.inf])
+        # bounds = ([1e-8, -np.inf], [np.inf, np.inf])
 
     res = least_squares(residuals, x0, bounds=bounds)
 
@@ -82,28 +71,12 @@ def fit_plasmon_pole(Omega, Fdata, F0=None, Finf=None):
         "wp": wp_fit,
         "residual_norm": np.linalg.norm(res.fun)
     }
-    
 
-def fit_G_update(Fdata, ir_file, eta=0.0001, beta=1000):
+
+def fit_G_update(Fdata, ir_file, beta=1000):
     """
     Load F(iOmega) data from BSE output file, fit to plasmon-pole model,
     and return fitted parameters.
-    
-    Parameters:
-    -----------
-    Fdata : np.ndarray
-        F(iOmega) data in shape (niw, 2 * occ * virt)
-    ir_file : str
-        Path to IR grid file
-    eta : float, optional
-        Small imaginary part
-    beta : float, optional
-        Inverse temperature
-        
-    Returns:
-    --------
-    tuple
-        wpole_data, S_data, Finf_data, res_norm_data
     """
     with h5py.File(ir_file, 'r') as f:
         wgrid = f["/bose/wsample"][()]
