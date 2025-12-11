@@ -16,25 +16,7 @@ from pyscf.gw.gw_ac import AC_pade_thiele_diag, pade_thiele
 
 def padeSigma(Sigma_tk_int, fock_eigs, beta, mu, tau_h5):
     """
-    Get the diagonal of Self-energy for analytic continuation.
-    
-    Parameters:
-    -----------
-    Sigma_tk_int : np.ndarray
-        Self-energy in tau-k space
-    fock_eigs : np.ndarray
-        Fock eigenvalues
-    beta : float
-        Inverse temperature
-    mu : float
-        Chemical potential
-    tau_h5 : str
-        Path to tau HDF5 file
-        
-    Returns:
-    --------
-    sc_qp_eigs : np.ndarray
-        Self-consistent quasiparticle eigenvalues
+    Get the diagonal of one-particle Self-energy and applied Pade approximation.
     """
     Sigma_tk_diag = np.einsum('tskii -> tski', Sigma_tk_int)
     Sigma_iw_diag = ct.tau2omegaFTforG(Sigma_tk_diag, beta, tau_h5)
@@ -45,7 +27,8 @@ def padeSigma(Sigma_tk_int, fock_eigs, beta, mu, tau_h5):
     nk = Sigma_tk_diag.shape[2]
     
     with h5py.File(tau_h5, 'r') as f:
-        iwsample = f["/fermi/wsample"][()]
+        niwsample = f["/fermi/wsample"][()]
+        iwsample  = (2 * niwsample + 1) * np.pi / beta
     
     nw = iwsample.shape[0]
     iwsample_pos = iwsample[iwsample > 0]
@@ -110,3 +93,4 @@ def padeSigma(Sigma_tk_int, fock_eigs, beta, mu, tau_h5):
                     )
     
     return sc_qp_eigs
+

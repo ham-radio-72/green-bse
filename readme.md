@@ -1,61 +1,75 @@
-# BSE@scGW
+# BSE Casida Equation Solver for Matsubara Green's Function Methods
 
-# The pristine form
+This python module implements a solver for the Bethe-Salpeter Equation (BSE) using the Casida formalism on the sparse sampled Matsubara frequency grid. It is designed to compute optical excitation energies and properties within the BSE@*GW* framework.
 
+The Casida equation is formulate as follows.
 $$
-\chi_{ijkl} = \Pi_{ijkl} + \Pi_{ijqp}\Xi_{pqnm}\chi_{mnkl}
-$$
-
-As of now this is solved iteratively. The complexity would be $\mathcal O (N^8_{AO})$.
-
-The approximate form of BSE kernel is:
-
-$$
-\Xi_{pqnm} \approx U_{pqmn} - W_{pqnm} 
-$$
-
-Note that this is a total kernel. It doesn’t differentiate singlet/triplet/forbidden excitations. 
-
-# The two-point contraction
-
-Contracting the four-point kernel to two-point (real space):
-
-$$
-^2\chi(1,2) = \sum_{1^+,2^+}\ ^4\chi(1,1^+,2^+,2)
+\begin{pmatrix}
+A & B \\ 
+-B^* & -A^* 
+\end{pmatrix}\begin{pmatrix}
+X_n \\ 
+Y_n 
+\end{pmatrix} = \omega_n\begin{pmatrix}
+X_n \\ 
+Y_n
+\end{pmatrix}
 $$
 
-For the bare Coulomb interaction in real space
-
 $$
-U (r_1,r'_1;r_2,r'_2)=U (r_1,r_2) \delta(r_1,r_1') \delta(r_2,r'_2)
+A_{ia,jb} = \Delta \epsilon_{ia,jb} +\kappa U_{ia,jb} - W_{ij,ab}
 $$
 
-Contracting to microscopic dielectric function:
-
 $$
-\epsilon_{ij}^{-1}(i\omega) = \delta_{ij} + \sum_k\ U_{ik}\chi_{kj}(i\omega)
+\Delta \epsilon_{ia,jb} = (\epsilon_a - \epsilon_i)\delta_{ia,jb} =  (\epsilon_a - \epsilon_i)\delta_{ij}\delta_{ab} 
 $$
 
-Invert microscopic dielectric function to macroscopic dielectric function
-
 $$
-\epsilon_{ij}(i\omega) = 1/\epsilon^{-1}_{ij}(i\omega)
+B_{ia,jb} = \kappa U_{ia,bj} - W_{ib,aj}
 $$
 
-Define an auxiliary function 
+## Main Features
 
-$$
-f(i\omega_n) = \epsilon_{ij}(i\omega) - \delta_{ij}
-$$
+- Solves dynamic BSE equations on imaginary frequency grid
+- Provides dynamic solutions and spectral function via plasmon pole fitting
+- Draws molecular orbitals for each particle-hole pair
+- Quasi-particle (QP) approximation for *GW* energy levels
+- Tamm-Dancoff approximation (TDA) option for Casida equation
+- Currently only supports molecular or single *k*-point systems
 
-The spectral function of $f(i\omega_n)$ should be the same as $\epsilon_{ij}(i\omega)$ as the spectral function of a constant ($\delta_{ij}$) shoud be zero.
+Input Files
+-----------
 
-# The inversion method
+- `input.h5`: Mean-field (HF/DFT) reference data
+- `sim.h5`: Single-particle Green's function reuslts from scGW iterations
+- `df_hf_int/`: Path for electron repulsion integrals (ERI) in auxiliary basis
+- IR basis file: Intermediate representation grid information
 
-Other than iterating over four-point quantity, we can also try to invert this:
+Usage Example
+-------------
 
-$$
-\mathcal I - \Xi \Pi
-$$
+Job submission scripts are included in the example folder. The usage of main job script:
 
-The matrix size would be $N^2_{AO}\times N^2_{AO}$, then complexity would be $\mathcal O (N^6_{AO})$
+```bat
+export SCRIPTDIR=/your/code/directory/green-bse/example
+export INPUTDIR=/your/input/directory
+export SIMDIR=/your/input/directory
+export IRDIR=/your/irgrid/directory
+
+python $SCRIPTDIR/solveCasida_main.py --type singlet \
+       --calc_pi 1 --qpac 1 --monitor 1 \
+       --iter -1 --iter_W -1 --beta 1000 \
+       --sim $SIMDIR/sim.h5 \
+       --int_path $INPUTDIR/df_hf_int/ \
+       --input $INPUTDIR/input.h5 \
+       --ir_file $IRDIR/1e5_136.h5 \
+       --output $SIMDIR/bseCasida.h5 
+```
+
+Some parameter definitions:
+
+- `calc_pi`: Calculate polarizability on the fly (default: `True`)
+- `qpac`: Use QP for *GW* energy levels (default: `True`)
+- `monitor`: Memory and parallelization monitoring (default: `True`)
+- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the lastest iteration)
+- `bseCasida.h5`: Output containing excitation energies, eigenvectors, and fitted poles
