@@ -588,8 +588,6 @@ def create_argument_parser():
                         help="Type of excitations (singlet or triplet).")
 
     # Calculation switches
-    # parser.add_argument("--tda", type=int, default=0,
-    #                     help="Enable Tamm-Dancoff approximation")
     parser.add_argument("--qpac", type=int, default=1,
                         help="Enable Quasi-Particle (QP) Approximation?")
     parser.add_argument("--tda", type=int, default=0,
