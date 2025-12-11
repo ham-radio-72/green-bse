@@ -3,6 +3,7 @@
 This python module implements a solver for the Bethe-Salpeter Equation (BSE) using the Casida formalism on the sparse sampled Matsubara frequency grid. It is designed to compute optical excitation energies and properties within the BSE@*GW* framework.
 
 The Casida equation is formulate as follows.
+
 $$
 \begin{pmatrix}
 A & B \\ 
