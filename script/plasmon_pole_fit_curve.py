@@ -84,7 +84,7 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
                  xy=(0.65, 0.1), xycoords='axes fraction',
                  bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
-    plt.show()
+    # plt.show()
     
     
 def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx=0, beta=1000):
@@ -142,7 +142,7 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_nor
                  xy=(0.65, 0.1), xycoords='axes fraction',
                  bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
-    plt.show()
+    # plt.show()
     
     
 def main():

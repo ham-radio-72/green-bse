@@ -37,7 +37,7 @@ def plot_spectral_function(pole_loc, pole_str, eta, wmin=0, wmax=20, npts=2000):
     plt.xlim(wmin, wmax)
     plt.title("BSE Spectral Function")
     plt.tight_layout()
-    plt.show()
+    # plt.show()
     
 def main():
     parser = argparse.ArgumentParser(
