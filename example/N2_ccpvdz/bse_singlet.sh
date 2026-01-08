@@ -2,7 +2,7 @@
 
 export SCRIPTDIR=../../script
 export SIMDIR=./scgw
-export IRDIR=/home/wenm/irgrids
+export IRDIR=./irgrid
 
 python -u $SCRIPTDIR/solveCasida_main.py \
        --type singlet --beta 1000 \

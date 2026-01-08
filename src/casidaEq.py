@@ -77,7 +77,8 @@ def solveMO(F, S, eigh_solver=LA.eigh, thr=1e-7):
         S = np.array([[np.eye(nao)]*nk]*ns)
     for ss in range(ns):
         for k in range(nk):
-            eiv, mo = eigh_solver(F[ss, k], S[ss, k], thr)
+            # eiv, mo = eigh_solver(F[ss, k], S[ss, k], thr)
+            eiv, mo = eigh_solver(F[ss, k], S[ss, k])
             # Re-order
             idx = np.argmax(abs(mo.real), axis=0)
             mo[:, mo[idx, np.arange(len(eiv))].real < 0] *= -1
