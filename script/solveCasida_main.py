@@ -6,9 +6,10 @@
 #                                                                             #
 
 import sys
+from pathlib import Path
 
-# Please edit the src path for importing.
-sys.path.append('/Users/wenming/green-bse/src')
+this_dir = Path(__file__).resolve().parent
+sys.path.append(str(this_dir / "../src"))
 
 from bse import create_argument_parser, BSESolver, BSEConfig
 
