@@ -107,6 +107,9 @@ def main():
     # Examine AO data
     occ_ao_data, polefit_data, num_exc = examine_AO(args.bse_file, type='occ')
     virt_ao_data, polefit_data, num_exc = examine_AO(args.bse_file, type='virt')
+    if polefit_data.ndim > 1:
+        polefit_data = polefit_data[:, 0]
+    
     print("=" * 60)
     print(f"BSE file: {args.bse_file}")
     print(f"Coordinates file: {args.coords_file}")

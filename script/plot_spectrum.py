@@ -2,7 +2,7 @@
 #                                                                             #
 #    Copyright (c) 2025 Ming Wen <wenm@umich.edu>, University of Michigan.    #
 #                                                                             #
-#    Plot the plasmon-pole model fitted results for BSE calculations          #
+#    Plot the plasmon-pole model fitted spectrum for BSE calculations         #
 #                                                                             #
 
 import h5py
