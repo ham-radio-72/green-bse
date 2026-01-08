@@ -8,7 +8,7 @@
 import sys
 
 # Please edit the src path for importing.
-sys.path.append('/home/wenm/green-bse/src')
+sys.path.append('/Users/wenming/green-bse/src')
 
 import h5py
 import numpy as np
