@@ -145,21 +145,24 @@ def effVex2AO(effVex, moVex, nelec):
     return effVex_occ_ao, effVex_virt_ao
 
 
-def mo2ovStat(mat4PStat_mo,nelec):
-    occ  = nelec//2
-    mat4PStat_ov = mat4PStat_mo[:occ,occ:,:occ,occ:]
+def mo2ovStat(mat4PStat_mo):
+    # occ  = nelec//2
+    # mat4PStat_ov = mat4PStat_mo[:occ,occ:,:occ,occ:]
+    mat4PStat_ov = mat4PStat_mo[:]
 
     return mat4PStat_ov
 
 
-def diffEpsMat(eigVals):
+def diffEpsMat(eigVals,nelec):
     nao = len(eigVals)
-    diffEps = np.zeros((nao,nao,nao,nao),dtype=np.complex128)
+    nocc = nelec // 2
+    nvirt = nao - nocc
+    diffEps = np.zeros((nocc,nvirt,nocc,nvirt),dtype=np.complex128)
     # ia,jb
     # i = j and a = b
-    for i in range(nao):
-        for a in range(nao):
-            diffEps[i,a,i,a] += eigVals[a] - eigVals[i]
+    for i in range(nocc):
+        for a in range(nvirt):
+            diffEps[i,a,i,a] += eigVals[a+nocc] - eigVals[i]
         
     return diffEps
 
@@ -183,7 +186,7 @@ def getDiffEps(valsMO,nelec):
     nao   = valsMO.shape[-1]
     occ   = nelec // 2
     virt  = nao - occ
-    diffEps = diffEpsMat(valsMO[0,0,:])
+    diffEps = diffEpsMat(valsMO[0,0,:],nelec)
     diffEps_ov = np.zeros([occ*virt,occ*virt],dtype=np.complex128)
     for i in range(occ):
         for a in range(occ,nao):
@@ -202,7 +205,7 @@ def HinfDiagApprox(effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
     """
     occ  = nelec // 2
     virt = VQ.shape[-1] - occ
-    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:]),nelec).reshape(occ*virt,occ*virt)
+    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
     nao  = VQ.shape[-1]
     virt = nao - occ
     U1   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,:occ], VQ[0,:,occ:,occ:], optimize='optimal')
@@ -241,7 +244,7 @@ def HStatDiagApprox(Pi_stat,effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
     occ  = nelec // 2
     nao  = VQ.shape[-1]
     virt = nao - occ
-    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:]),nelec).reshape(occ*virt,occ*virt)
+    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
     # print("*****    Solving static effective Hamiltonian    *****")
     # Qkl: NQ * Nvirt * Nvirt
     PV  = np.einsum("qp,pkl->qkl", Pi_stat, VQ[0,:,occ:,occ:], optimize='optimal') 
@@ -291,9 +294,38 @@ def initG2p_inv(H2p_inf,ir_file,beta=1000):
 
     G2p_inv_init = np.zeros((niw,H2p_inf.shape[0]),dtype=np.complex128)
     for iw in range(niw):
-        G2p_inv_init[iw,:] = (1j * wgrid[iw] - H2p_inf)
+        # G2p_inv_init[iw,:] = (1j * wgrid[iw] - H2p_inf)
+        G2p_inv_init[iw,:] = (wgrid[iw]**2 + H2p_inf**2)/(-2*H2p_inf)
 
     return G2p_inv_init
+
+
+def G2p_inv(H2p,ir_file,beta=1000):
+    # diagonlaized G2p from H2p at all iomega.
+    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    wgrid = 2 * wgrid * np.pi / beta
+    niw = len(wgrid)
+
+    G2p_inv = np.zeros((niw,H2p.shape[1]),dtype=np.complex128)
+    for iw in range(niw):
+        # G2p_inv[iw,:] = (1j * wgrid[iw] - H2p[iw,:])
+        G2p_inv[iw,:] = (wgrid[iw]**2 + H2p[iw,:]**2)/(-2*H2p[iw,:])
+
+    return G2p_inv
+
+
+def G2p(H2p,ir_file,beta=1000):
+    # diagonlaized G2p from H2p at all iomega.
+    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    wgrid = 2 * wgrid * np.pi / beta
+    niw = len(wgrid)
+
+    G2p_inv = np.zeros((niw,H2p.shape[1]),dtype=np.complex128)
+    for iw in range(niw):
+        # G2p_inv[iw,:] = (1j * wgrid[iw] - H2p[iw,:])
+        G2p_inv[iw,:] = -H2p[iw,:]/(wgrid[iw]**2 + H2p[iw,:]**2)
+
+    return G2p_inv
 
 
 def _process_update_frequency_point(
@@ -376,15 +408,74 @@ def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_o
     return np.einsum('ij,jk,ki->i', effVex_inv, H, effVex)
 
 
-def HDynDiagApprox(Pi,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
+def GDyn(Pi,effVex,VQ,valsMO,nelec,ir_file,ex_type="singlet",n_jobs=-1,beta=1000):
+    # Must be in MO basis already.
+    # reorder from lowet to highest in case of energy reshuffle.
+    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    wgrid = 2 * wgrid * np.pi / beta
+    niw = len(wgrid)
+    occ  = nelec // 2
+    virt = VQ.shape[-1] - occ
+    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
+    niw_half = niw // 2 + 1
+    effVex_inv = LA.inv(effVex)
+    occ  = nelec // 2
+    nao  = VQ.shape[-1]
+    virt = nao - occ
+    U1   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,:occ], VQ[0,:,occ:,occ:], optimize='optimal')
+    U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
+    # Diagonal approximation to H2p_Dyn at each frequency point.
+    # Parallelize over frequency points
+    results = Parallel(n_jobs=n_jobs, backend='threading')(
+        delayed(_process_gdyn_frequency_full)(
+            iw, wgrid, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2
+        ) for iw in range(niw)
+    )
+    
+    # Collect results (always symmetric)
+    G2p_Dyn = np.zeros((niw,2*occ*virt),dtype=np.complex128)
+    for iw, result in enumerate(results):
+        G2p_Dyn[iw] = result
+    # for iw, result in enumerate(results):
+    #     G2p_Dyn[niw - 1 - iw] = result
+    
+    G2p_Dyn = symmetrizeH2p(G2p_Dyn)
+    # return effVals, G2p_Dyn, valsMO
+    return G2p_Dyn
+
+
+def _process_gdyn_frequency_full(iw, wgrid, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2):
+    """Helper function to process GDyn for a single frequency point."""
+    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,occ:], optimize='optimal') 
+    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,:occ], PV, optimize='optimal')
+    # ijkl: Nocc * Nocc * Nvirt * Nvirt
+    W   = VPV + U1
+    A   = matEleXiStat(VQ,W,nelec,ex_type)
+    A   = diffEps_ov + A.reshape(occ*virt,occ*virt)
+    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal') 
+    # ijkl: Nocc * Nvirt * Nvirt * Nocc
+    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
+    # ijkl: Nocc * Nvirt * Nvirt * Nocc
+    W   = VPV + U2
+    B   = matEleBStat(VQ,W,nelec,ex_type)
+    B   = B.reshape(occ*virt,occ*virt)
+    H   = concatAB(A,B)
+    # diagonalize H
+    np.einsum('ij,jk,kl->il', effVex_inv, H, effVex)
+    I   = np.eye(H.shape[0],dtype=np.complex128)
+    G   = LA.inv(1j * wgrid[iw] * I - H)
+
+    return np.diagonal(G)
+
+
+def HDynDiagApprox(Pi,effVex,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
     # Must be in MO basis already.
     # reorder from lowet to highest in case of energy reshuffle.
     occ  = nelec // 2
     virt = VQ.shape[-1] - occ
-    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:]),nelec).reshape(occ*virt,occ*virt)
+    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
     niw  = Pi.shape[0] 
     niw_half = niw // 2 + 1
-    effVals, effVex = solveHstatic(Pi[niw//2,0,:,:,0],VQ,diffEps_ov,nelec,ex_type,tda=0)
     effVex_inv = LA.inv(effVex)
     occ  = nelec // 2
     nao  = VQ.shape[-1]
@@ -405,9 +496,22 @@ def HDynDiagApprox(Pi,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
         H2p_Dyn[iw] = result
     for iw, result in enumerate(results):
         H2p_Dyn[niw - 1 - iw] = result
-        
+    
+    H2p_Dyn = symmetrizeH2p(H2p_Dyn)
     # return effVals, H2p_Dyn, valsMO
-    return effVals, H2p_Dyn
+    return H2p_Dyn
+
+
+def symmetrizeH2p(H2p):
+    """
+    Symmetrize the H2p matrix across frequency points.
+    """
+    niw = H2p.shape[0]
+    niw_half = niw // 2 + 1
+    for iw in range(niw_half):
+        H2p[iw] = 0.5 * (H2p[iw] + H2p[niw - 1 - iw].conj())
+        H2p[niw - 1 - iw] = H2p[iw].conj()
+    return H2p
 
 
 def _process_hdyn_tda_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1):

@@ -28,6 +28,8 @@ $$
 B_{ia,jb} = \kappa U_{ia,bj} - W_{ib,aj}
 $$
 
+Refer to our upcoming paper for more theoretical background. 
+
 ## Main Features
 
 - Solves dynamic BSE equations on imaginary frequency grid
@@ -51,25 +53,53 @@ Usage Example
 Job submission scripts are included in the example folder. The usage of main job script:
 
 ```bat
-export SCRIPTDIR=/your/code/directory/green-bse/example
+export SCRIPTDIR=/your/code/directory/green-bse/script
 export INPUTDIR=/your/input/directory
 export SIMDIR=/your/input/directory
 export IRDIR=/your/irgrid/directory
 
 python $SCRIPTDIR/solveCasida_main.py --type singlet \
-       --calc_pi 1 --qpac 1 --monitor 1 \
+       --calc_pi 1 --qpac 1 --monitor 1 --n_jobs -1 \
        --iter -1 --iter_W -1 --beta 1000 \
        --sim $SIMDIR/sim.h5 \
        --int_path $INPUTDIR/df_hf_int/ \
        --input $INPUTDIR/input.h5 \
        --ir_file $IRDIR/1e5_136.h5 \
-       --output $SIMDIR/bseCasida.h5 
+       --output $SIMDIR/bse_singlet.h5 
 ```
 
-Some parameter definitions:
+Some useful parameter definitions:
 
 - `calc_pi`: Calculate polarizability on the fly (default: `True`)
 - `qpac`: Use QP for *GW* energy levels (default: `True`)
 - `monitor`: Memory and parallelization monitoring (default: `True`)
-- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the lastest iteration)
-- `bseCasida.h5`: Output containing excitation energies, eigenvectors, and fitted poles
+- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the lastest iteration). `iter` is for the Green's function and `iter_W` is for screened Coulomb iteraction. They should be the same, but two separate variables are defined for testing purposes. 
+- `n_jobs`: Number of threads to be used. (default: `-1` to use all threads available)
+- `output`: Output containing excitation energies, eigenvectors, and fitted poles.
+
+
+Try it out now!
+-------------
+
+We have provided an example of dinitrogen molecule in the `cc-pvdz` basis set. 
+It is a small enough system that you can run on your desktop.
+In '/example/N2_ccpvdz', you can find all the output you needed from DFT and sc*GW* calculations. Simply run:
+
+```bat
+sh bse_singlet.sh > bse_singlet.log
+```
+
+This submits a BSE calculation and the results will be saved in a `.h5` file. 
+In the `.log` file you can also find the printed values of static and dynamic particle-hole excitations.
+After the BSE calculation is done, you can run these two scripts:
+
+```bat
+sh check_MO_molden.sh 
+sh plot_plas_pole.sh 
+```
+
+`check_MO_molden.sh` generates the `.molden` file for each particle-hole excitation. 
+It contains the MO that hosts the electron originally and the MO it is excited to. 
+You can use any software that visualizes `.molden` file to identify the excitation type.
+
+`plot_plas_pole.sh` plots the BSE-computed auxiliary response function and the plasmon-pole fitted results.
