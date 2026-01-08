@@ -8,7 +8,7 @@
 import sys
 
 # Please edit the src path for importing.
-sys.path.append('/home/wenm/green-bse/src')
+sys.path.append('/Users/wenming/green-bse/src')
 
 from bse import create_argument_parser, BSESolver, BSEConfig
 
