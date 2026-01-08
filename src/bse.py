@@ -375,13 +375,90 @@ class BSESolver:
         if not self.config.tda_enabled:
             # Full BSE calculation
             diffEps_ov = casida.mo2ovStat(
-                casida.diffEpsMat(self.valsMO[0, 0, :]), self.nelec
+                casida.diffEpsMat(self.valsMO[0, 0, :], self.nelec)
             ).reshape(self.occ * self.virt, self.occ * self.virt)
             
             # Use static limit for initial guess
             effVals_static, effVex_static, H_stat = casida.solveHstatic(
                 tildeP_iw[niw//2, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
                 ex_type=self.config.excitation_type, tda=0
+            )
+            
+            H2p_dyn = casida.HDynDiagApprox(
+                tildeP_iw,effVex_static,VQ,self.valsMO,
+                self.nelec,ex_type=self.config.excitation_type,
+                n_jobs=self.config.n_jobs
+            )
+            
+            H2p_inf = H2p_dyn[0]
+            
+            effVex_occ_ao, effVex_virt_ao = casida.effVex2AO(
+                effVex_static, self.vexMO[0, 0, :], self.nelec
+            )
+            
+            # Sort eigenvalues and eigenvectors by eigenvalues
+            idx = np.argsort(effVals_static)
+            effVals_static = effVals_static[idx]
+            H2p_inf = H2p_inf[idx]
+            H2p_dyn = H2p_dyn[:, idx]
+            effVex_static  = effVex_static[:, idx]
+            effVex_occ_ao  = effVex_occ_ao[:, idx] 
+            effVex_virt_ao = effVex_virt_ao[:, idx]
+            
+            G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
+            
+            niw = G2p_iw_init_inv.shape[0]
+            
+            G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
+            for iw in range(niw):
+                G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
+            
+            G2p_iw_updated = casida.G2p(H2p_dyn, self.config.ir_file, self.config.beta)
+
+            G2p_tau_updated = ct.omega2tauFT(G2p_iw_updated, self.config.beta, self.config.ir_file)
+            
+            wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update(
+                G2p_iw_updated, self.config.ir_file, beta=self.config.beta
+            )
+            
+            self.results.update({
+                'G2p_iw_init': G2p_iw_init,
+                'G2p_iw_updated': G2p_iw_updated,
+                'G2p_tau_updated': G2p_tau_updated,
+                'H2p_inf': H2p_inf,
+                'H_stat': H_stat,
+                'effVals_static': effVals_static,
+                'effVex_static': effVex_static,
+                'pole_fit': wpole_data,
+                'S_fit': S_data,
+                'residual_norm_fit': res_norm_data,
+                'occ_AO_indices': effVex_occ_ao,
+                'virt_AO_indices': effVex_virt_ao
+            })
+            
+        else:
+            print("TDA approximation is not fully implemented yet. Exiting.")
+            raise NotImplementedError("TDA approximation not implemented")
+    
+    def solve_bse_equations_full(self, VQ: np.ndarray, tildeP_iw: np.ndarray):
+        """Solve BSE equations."""
+        niw = tildeP_iw.shape[0]
+        
+        if not self.config.tda_enabled:
+            diffEps_ov = casida.mo2ovStat(
+                casida.diffEpsMat(self.valsMO[0, 0, :], self.nelec)
+            ).reshape(self.occ * self.virt, self.occ * self.virt)
+
+            effVals_static, effVex_static, H_stat = casida.solveHstatic(
+                tildeP_iw[niw//2, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
+                ex_type=self.config.excitation_type, tda=0
+            )
+            
+            # discard imaginary part due to non-hermitian Hamiltonian (ill-conditioned)
+            effVex_static = effVex_static.real 
+            
+            effVals_static = casida.HStatDiagApprox(
+                tildeP_iw[niw//2, 0, :, :, 0], effVex_static, VQ, self.valsMO, self.nelec, self.config.excitation_type
             )
             
             H2p_inf = casida.HinfDiagApprox(
@@ -392,7 +469,7 @@ class BSESolver:
                 effVex_static, self.vexMO[0, 0, :], self.nelec
             )
             
-            # Sort eigenvalues and eigenvectors by absolute value of eigenvalues
+            # Sort eigenvalues and eigenvectors by eigenvalues
             idx = np.argsort(effVals_static)
             effVals_static = effVals_static[idx]
             H2p_inf = H2p_inf[idx]
@@ -400,8 +477,8 @@ class BSESolver:
             effVex_occ_ao  = effVex_occ_ao[:, idx] 
             effVex_virt_ao = effVex_virt_ao[:, idx]
             
-            G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
-
+            G2p_iw_init_inv = casida.initG2p_inv(H2p_inf.real, self.config.ir_file, self.config.beta)
+            
             # diagonalization
             niw = G2p_iw_init_inv.shape[0]
             
@@ -416,8 +493,8 @@ class BSESolver:
             G2p_iw_updated = casida.updateG2p_alt(
                 G2p_iw_init_inv, tildeP_iw, effVex_static, VQ, 
                 self.nelec, self.config.n_jobs, firstOrder=True
-            )
-                
+            )   
+                            
             if self.config.monitoring_enabled:
                 self.monitor.monitor_memory("After updateG2p_alt")
                 
@@ -427,12 +504,16 @@ class BSESolver:
                 G2p_iw_updated, self.config.ir_file, beta=self.config.beta
             )
             
+            # wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update_two_pole(
+            #     G2p_iw_updated, self.config.ir_file, beta=self.config.beta
+            # )
+            
             self.results.update({
                 'G2p_iw_init': G2p_iw_init,
                 'G2p_iw_updated': G2p_iw_updated,
                 'G2p_tau_updated': G2p_tau_updated,
                 'H2p_inf': H2p_inf,
-                'H_stat': H_stat,
+                # 'H_stat': H_stat, 
                 'effVals_static': effVals_static,
                 'effVex_static': effVex_static,
                 'pole_fit': wpole_data,
@@ -463,7 +544,7 @@ class BSESolver:
             f["/MOvals/data"] = self.valsMO
             f["/AOindices/occ"] = self.results['occ_AO_indices']
             f["/AOindices/virt"] = self.results['virt_AO_indices']
-            f["/H_stat/data"] = self.results['H_stat']
+            # f["/H_stat/data"] = self.results['H_stat']
         
         end = time.time()
         print("*" * 90)
@@ -475,15 +556,27 @@ class BSESolver:
         print("=" * 100)
         print("EXCITATION EIGENVALUES (eV)")
         print("Only printing the first 20 positive eigenvalues from each calculation.")
-        print("-" * 100)
+        print("-" * 100) 
         
         # Get eigenvalues
-        static_pos = self.results['effVals_static'][self.results['effVals_static'] > 0].real
+        idx_li = self.results['effVals_static'] > 0
+        static_pos = self.results['effVals_static'][idx_li].real
         static_ev = static_pos * AU2EV
-        inf_pos = self.results['H2p_inf'][self.results['H2p_inf'] > 0].real
+        inf_pos = self.results['H2p_inf'][idx_li].real
         inf_ev = inf_pos * AU2EV
-        dyn_pos = self.results['pole_fit'][self.results['S_fit'] < 0].real
+        pole_data = self.results['pole_fit']
+        s_data = self.results['S_fit']
+        
+        # Check dimensions and extract first peak if needed
+        if pole_data.ndim > 1:
+            dyn_pos = pole_data[:, 0][idx_li].real
+            res = self.results['residual_norm_fit'][:][idx_li].real
+        else:
+            dyn_pos = pole_data[idx_li].real
+            res = self.results['residual_norm_fit'][idx_li].real
+
         dyn_ev = dyn_pos * AU2EV
+        # res = res
         
         # Determine how many to display (first 20 by default)
         n_static = min(20, len(static_ev))
@@ -492,7 +585,7 @@ class BSESolver:
         n_display = max(n_static, n_inf, n_dyn)
         
         if n_display > 0:
-            print(f"{'Index':>5} {'Static (eV)':>15} {'Infinite (eV)':>15} {'Dynamic (eV)':>15}")
+            print(f"{'Index':>5} {'Static (eV)':>15} {'Infinite (eV)':>15} {'Dynamic (eV)':>15} {'Residual':>15}")
             print("-" * 100)
             
             for i in range(n_display):
@@ -503,8 +596,9 @@ class BSESolver:
                 static_str = f"{static_val:10.4f}" if static_val is not None else "N/A"
                 inf_str = f"{inf_val:10.4f}" if inf_val is not None else "N/A"
                 dyn_str = f"{dyn_val:10.4f}" if dyn_val is not None else "N/A"
+                res_str = f"{res[i]:10.4f}" if i < len(res) else "N/A"
 
-                print(f"{i:5d} {static_str:>15} {inf_str:>15} {dyn_str:>15}")
+                print(f"{i:5d} {static_str:>15} {inf_str:>15} {dyn_str:>15} {res_str:>15}")
                 
             print("......")
         else:
@@ -528,6 +622,7 @@ class BSESolver:
         # Solve BSE equations
         start_bse = time.time()
         self.solve_bse_equations(VQ, tildeP_iw)
+        # self.solve_bse_equations_full(VQ, tildeP_iw)
         end_bse = time.time()
         print("*" * 90)
         print(f"    BSE Casida equation: {end_bse - start_bse:.4f} secs    ")
