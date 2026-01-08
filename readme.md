@@ -40,6 +40,18 @@ Refer to our upcoming paper for more theoretical background.
 - Tamm-Dancoff approximation (TDA) option for Casida equation
 - Currently only supports molecular or single *k*-point systems
 
+Python dependency
+-----------
+
+| Package    | Version    |
+|------------|------------|
+| `h5py`     | 3.15.1     |
+| `irbasis`  | 2.2.3      |
+| `joblib`   | 1.5.3      |
+| `numpy`    | 2.4.0      |
+| `pyscf`    | 2.6.2      |
+| `scipy`    | 1.16.3     |
+
 Input Files
 -----------
 
@@ -85,12 +97,6 @@ Try it out now!
 We have provided an example of dinitrogen molecule in the `cc-pvdz` basis set. 
 It is a small enough system that you can run on your desktop.
 In '/example/N2_ccpvdz', you can find all the output you needed from DFT and sc*GW* calculations. 
-
-First you might need to modify the path for `src` in `script/solveCasida_main.py` and `script/plasmon_pole_fit_curve.py` for correct importing.
-
-```
-sys.path.append(('/absolute/path/to/green-bse/src'))
-```
 
 Simply run:
 
