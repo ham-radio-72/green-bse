@@ -84,7 +84,15 @@ Try it out now!
 
 We have provided an example of dinitrogen molecule in the `cc-pvdz` basis set. 
 It is a small enough system that you can run on your desktop.
-In '/example/N2_ccpvdz', you can find all the output you needed from DFT and sc*GW* calculations. Simply run:
+In '/example/N2_ccpvdz', you can find all the output you needed from DFT and sc*GW* calculations. 
+
+First you might need to modify the path for `src` in `script/solveCasida_main.py` and `script/plasmon_pole_fit_curve.py` for correct importing.
+
+```
+sys.path.append(('/absolute/path/to/green-bse/src'))
+```
+
+Simply run:
 
 ```bat
 sh bse_singlet.sh > bse_singlet.log
