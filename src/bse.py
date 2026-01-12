@@ -6,10 +6,13 @@
 #    on the Matsubara frequency grid.                                         #
 #                                                                             #
 
+import platform
 import time
 import argparse
 from dataclasses import dataclass
 from typing import Optional, Tuple
+import pyscf
+import scipy
 import casidaEq as casida
 import h5py
 import contract as ct
@@ -209,6 +212,15 @@ class BSESolver:
         self.vexMO = None
         self.results = {}
     
+    def print_python_info(self):
+        """Print Python environment information."""
+        print("PYTHON ENVIRONMENT")
+        print(f"python version:  {platform.python_version()}")
+        print(f"numpy  version:  {np.__version__}")
+        print(f"scipy  version:  {scipy.__version__}")
+        print(f"h5py   version:  {h5py.__version__}")
+        print(f"pyscf  version:  {pyscf.__version__}")
+    
     def print_header(self):
         """Print calculation header."""
         print("=" * 90)
@@ -216,7 +228,9 @@ class BSESolver:
         print("FOR MATUSBARA GREEN'S FUNCTION")
         print("Copyright (c) 2025 Ming Wen <wenm@umich.edu>, University of Michigan.")
         print("                   Gaurav Harsha <gharsha@umich.edu>, University of Michigan.")
-
+        
+        print("-" * 90)
+        self.print_python_info()
         print("-" * 90)
         print(f"Input file:        {self.config.input_file}")
         print(f"Integral file:     {self.config.int_path}")
