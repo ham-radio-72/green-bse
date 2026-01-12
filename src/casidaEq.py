@@ -596,7 +596,16 @@ def solveHstatic(Pi_stat,VQ,diffEps_ov,nelec,ex_type="singlet",tda=0):
     # check condition number.
     cond = np.linalg.cond(H_stat)
     print(f" Solving non-Hermitian eigenvalue equation. Condition number = {cond:10.4f}")
-    effVals,effVex = LA.eig(H_stat)
+    # effVals,effVex = LA.eig(H_stat)
+    
+    from scipy.linalg import matrix_balance
+    # balance matrix
+    H_stat_balanced, scale = matrix_balance(H_stat)
+    effVals,effVex = LA.eig(H_stat_balanced)
+    
+    # fix sign ambiguity
+    idx = np.argmax(abs(effVex.real), axis=0)
+    effVex[:,effVex[idx,np.arange(len(effVals))].real<0] *= -1
     # effVex is of the shape (2ov,2ov)
 
     return effVals, effVex, H_stat
