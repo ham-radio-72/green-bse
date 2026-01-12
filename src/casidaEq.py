@@ -68,6 +68,14 @@ def matEleBStat(VQ, W, nelec, type="normal"):
     return B
 
 
+def fix_phase(mo):
+    for i in range(mo.shape[1]):
+        k = np.argmax(np.abs(mo[:, i]))  # index of largest element
+        phase = np.angle(mo[k, i])
+        mo[:, i] *= np.exp(-1j * phase)  # rotate so largest component is real
+    return mo
+
+
 def solveMO(F, S, eigh_solver=LA.eigh, thr=1e-7):
     # print("*****    Solving Fock    *****")
     ns, nk, nao = F.shape[0:3]
@@ -82,6 +90,7 @@ def solveMO(F, S, eigh_solver=LA.eigh, thr=1e-7):
             # Re-order
             idx = np.argmax(abs(mo.real), axis=0)
             mo[:, mo[idx, np.arange(len(eiv))].real < 0] *= -1
+            mo = fix_phase(mo)
             nbands = eiv.shape[0]
             eiv_sk[ss, k, :nbands] = eiv
             mo_coeff_sk[ss, k, :, :nbands] = mo
@@ -602,6 +611,7 @@ def solveHstatic(Pi_stat,VQ,diffEps_ov,nelec,ex_type="singlet",tda=0):
     # balance matrix
     H_stat_balanced, scale = matrix_balance(H_stat)
     effVals,effVex = LA.eig(H_stat_balanced)
+    effVex = LA.solve(scale,effVex)
     
     # fix sign ambiguity
     idx = np.argmax(abs(effVex.real), axis=0)
