@@ -27,7 +27,8 @@ def padeSigma(Sigma_tk_int, fock_eigs, beta, mu, tau_h5):
     nk = Sigma_tk_diag.shape[2]
     
     with h5py.File(tau_h5, 'r') as f:
-        niwsample = f["/fermi/wsample"][()]
+        # use ngrid, which is the Matsubara frequencies integer.
+        niwsample = f["/fermi/ngrid"][()]
         iwsample  = (2 * niwsample + 1) * np.pi / beta
     
     nw = iwsample.shape[0]

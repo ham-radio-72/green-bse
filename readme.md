@@ -52,6 +52,7 @@ Python dependency
 | `pyscf`    | 2.8.0      |
 | `scipy`    | 1.16.3     |
 | `psutil`   | 7.2.1      |
+| `green-mbtools` | 0.3.0 |
 
 Input Files
 -----------

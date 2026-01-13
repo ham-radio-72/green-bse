@@ -10,6 +10,7 @@ import numpy as np
 import h5py
 from scipy.optimize import least_squares, minimize_scalar
 
+
 AU2EV = 27.211386245981  # Hartree to eV conversion factor
 
 def plasmon_model(z, Finf, S, wp):
@@ -129,7 +130,8 @@ def fit_G_update(Fdata, ir_file, beta=1000):
     """
     print("Fitting to single-plasmon-pole model.")
     with h5py.File(ir_file, 'r') as f:
-        wgrid = f["/bose/wsample"][()]
+        # use ngrid, which is the Matsubara frequencies integer.
+        wgrid = f["/bose/ngrid"][()]
         wgrid = 2 * wgrid * np.pi / beta
     
     print(f"Fdata shape: {Fdata.shape}")
@@ -248,7 +250,7 @@ def fit_G_update_two_pole(Fdata, ir_file, beta=1000):
     
     print("Fitting to two-plasmon-pole model.")
     with h5py.File(ir_file, 'r') as f:
-        wgrid = f["/bose/wsample"][()]
+        wgrid = f["/bose/ngrid"][()]
         wgrid = 2 * wgrid * np.pi / beta
     
     print(f"Fdata shape: {Fdata.shape}")

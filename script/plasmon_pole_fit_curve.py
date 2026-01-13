@@ -38,7 +38,8 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
     true_exc_idx = ov2//2 + exc_idx 
     
     with h5py.File(tau_h5, 'r') as f:
-        wgrid = f["/bose/wsample"][()]
+        # wgrid = f["/bose/wsample"][()]
+        wgrid = f["/bose/ngrid"][()]
         wgrid = 2 * wgrid * np.pi / beta
         Omega = wgrid * 1j
 
@@ -95,7 +96,8 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_nor
     true_exc_idx = ov2//2 + exc_idx 
     
     with h5py.File(tau_h5, 'r') as f:
-        wgrid = f["/bose/wsample"][()]
+        # wgrid = f["/bose/wsample"][()]
+        wgrid = f["/bose/ngrid"][()]
         wgrid = 2 * wgrid * np.pi / beta
         Omega = wgrid * 1j
 
