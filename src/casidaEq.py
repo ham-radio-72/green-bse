@@ -298,7 +298,10 @@ def HStatDiagApprox(Pi_stat,effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
 
 def initG2p_inv(H2p_inf,ir_file,beta=1000):
     # Initial diagonlaized G2p from H2p at iomega -> inf.
-    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # legacy support
+    # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # green-mbpt support
+    wgrid = h5py.File(ir_file,"r")["/bose/ngrid"][()]
     wgrid = 2 * wgrid * np.pi / beta
     niw = len(wgrid)
 
@@ -312,7 +315,10 @@ def initG2p_inv(H2p_inf,ir_file,beta=1000):
 
 def G2p_inv(H2p,ir_file,beta=1000):
     # diagonlaized G2p from H2p at all iomega.
-    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # legacy support
+    # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # green-mbpt support
+    wgrid = h5py.File(ir_file,"r")["/bose/ngrid"][()]
     wgrid = 2 * wgrid * np.pi / beta
     niw = len(wgrid)
 
@@ -326,7 +332,10 @@ def G2p_inv(H2p,ir_file,beta=1000):
 
 def G2p(H2p,ir_file,beta=1000):
     # diagonlaized G2p from H2p at all iomega.
-    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # legacy support
+    # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # green-mbpt support
+    wgrid = h5py.File(ir_file,"r")["/bose/ngrid"][()]
     wgrid = 2 * wgrid * np.pi / beta
     niw = len(wgrid)
 
@@ -421,7 +430,10 @@ def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_o
 def GDyn(Pi,effVex,VQ,valsMO,nelec,ir_file,ex_type="singlet",n_jobs=-1,beta=1000):
     # Must be in MO basis already.
     # reorder from lowet to highest in case of energy reshuffle.
-    wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # legacy support
+    # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
+    # green-mbpt support
+    wgrid = h5py.File(ir_file,"r")["/bose/ngrid"][()]
     wgrid = 2 * wgrid * np.pi / beta
     niw = len(wgrid)
     occ  = nelec // 2

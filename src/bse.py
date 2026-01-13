@@ -20,6 +20,7 @@ import numpy as np
 import qp
 import plasPole
 
+
 try:
     import psutil
     import multiprocessing as mp
@@ -34,6 +35,7 @@ AU2EV = 27.211386245981
 @dataclass
 class BSEConfig:
     """Configuration class for BSE calculations."""
+    __version__ = "0.1.0"
     # File paths
     input_file: str = "input.h5"
     sim_file: str = "sim.h5"
@@ -257,7 +259,11 @@ class BSESolver:
         
         print("Reading IR file")
         with h5py.File(self.config.ir_file, "r") as f:
-            wgrid = f["/bose/wsample"][()]
+            # legacy support
+            # wgrid = f["/bose/wsample"][()]
+            # green-irgrid support
+            wgrid = f["/bose/ngrid"][()]
+            
         wgrid = 2 * wgrid * np.pi / self.config.beta
         
         print("Reading input file")
@@ -265,6 +271,10 @@ class BSESolver:
             rSk = f["/HF/S-k"][()].view(complex)
             rSk = rSk.reshape(rSk.shape[:-1])
             rFk_input = f["/HF/Fock-k"][()].view(complex)
+            rFk_input = rFk_input.reshape(rFk_input.shape[:-1])
+            # green-mbpt support
+            rHk = f["/HF/H-k"][()].view(complex)  # Core Hamiltonian.
+            rHk = rHk.reshape(rHk.shape[:-1])
             self.nao = f["/params/nao"][()]
             self.nelec = f["/params/nel_cell"][()]
         
@@ -278,12 +288,15 @@ class BSESolver:
             if it == 1:
                 print("Reading the HF level Fock matrix for G0W0.")
                 rFk = rFk_input
+                # rFk = rFk.reshape(rFk.shape[:-1])  
             else:
-                rFk = f[f"iter{it}/Fock-k"][()].view(complex)
+                # legacy support
+                # rFk = f[f"iter{it}/Fock-k"][()].view(complex)
+                # green-mbpt support
+                rFk = f["iter" + str(it) + "/Sigma1"][()].view(complex) + rHk
                 
-            rFk = rFk.reshape(rFk.shape[:-1])
             rSigmak = f[f"iter{it}/Selfenergy/data"][()].view(complex)
-            rSigmak = rSigmak.reshape(rSigmak.shape[:-1])
+            # rSigmak = rSigmak.reshape(rSigmak.shape[:-1])
             mu = f[f"iter{it}/mu"][()]
         
         end = time.time()
