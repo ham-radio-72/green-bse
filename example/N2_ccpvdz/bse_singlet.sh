@@ -10,7 +10,7 @@ python -u $SCRIPTDIR/solveCasida_main.py \
        --calc_pi 1 --monitor 1 \
        --sim $SIMDIR/sim.h5 \
        --int_path ./df_hf_int/ \
-       --ir_file $IRDIR/1e5_136.h5 \
+       --ir_file $IRDIR/1e5.h5 \
        --input ./input.h5 \
        --output ./bse_singlet.h5 
        

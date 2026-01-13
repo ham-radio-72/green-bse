@@ -12,6 +12,8 @@ import numpy as np
 import h5py
 from scipy.linalg import inv
 import irFT
+# from green_mbtools.pesto.ir import IR_factory
+# legacy 
 from irFT import IR_factory
 
 
@@ -112,13 +114,14 @@ def eval_G_init_tau(beta=1000, input_h5="input.h5", tau_h5="1e5_120.h5"):
     Calculate G_tau data from the initial HF/DFT calculation.
     """
     # G(iw) = [iw + mu - F]^(-1)
-    wgrid = h5py.File(tau_h5, "r")["/fermi/wsample"][()]
+    # wgrid = h5py.File(tau_h5, "r")["/fermi/wsample"][()]
+    wgrid = h5py.File(tau_h5, "r")["/fermi/ngrid"][()]
     nao = h5py.File(input_h5, "r")["/params/nao"][()]
     Ne = h5py.File(input_h5, "r")["/params/nel_cell"][()]
     mo_energy = h5py.File(input_h5, "r")["/HF/mo_energy"][()]
     C = h5py.File(input_h5, "r")["/HF/mo_coeff"][()]
 
-    wgrid = (2 * np.pi / beta) * wgrid  # rescale to Matsubara frequencies
+    wgrid = (2 * np.pi + 1 / beta) * wgrid  # rescale to Matsubara frequencies
     mu = find_mu_bisection(mo_energy, Ne, beta, degeneracy=2)
     niw = wgrid.shape[0]
     print(f"The chemical potential mu (Hartree) = {mu}")
