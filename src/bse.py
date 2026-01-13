@@ -344,7 +344,50 @@ class BSESolver:
                 Sigma_tk_int, self.valsMO, self.config.beta, 
                 self.results['mu'], self.config.ir_file
             )
+            
+            print("\n" + "=" * 90)
+            print("QUASI-PARTICLE ENERGY LEVELS COMPARISON")
+            print("-" * 90)
+            print(f"{'Index':>8} {'Original (eV)':>20} {'QP Corrected (eV)':>20} {'Difference (eV)':>20}")
+            print("-" * 90)
+            
+            n_print = min(30, len(self.valsMO[0, 0, :]))
+            for i in range(n_print):
+                orig_ev = self.valsMO[0, 0, i] * AU2EV
+                qp_ev = valsMO_qp[0, 0, i] * AU2EV
+                diff_ev = (valsMO_qp[0, 0, i] - self.valsMO[0, 0, i]) * AU2EV
+                print(f"{i:8d} {orig_ev:20.6f} {qp_ev:20.6f} {diff_ev:20.6f}")
+            
+            print("=" * 90 + "\n")
+            
             self.valsMO = valsMO_qp
+            
+            # Print energy gap
+            homo_qp = valsMO_qp[0, 0, self.occ - 1] * AU2EV
+            lumo_qp = valsMO_qp[0, 0, self.occ] * AU2EV
+            gap_qp = lumo_qp - homo_qp
+            
+            print("=" * 90)
+            print("QUASI-PARTICLE ENERGY GAP")
+            print("-" * 90)
+            print(f"    HOMO (QP)       :       {homo_qp:20.6f} eV")
+            print(f"    LUMO (QP)       :       {lumo_qp:20.6f} eV")
+            print(f"    Energy Gap (QP) :       {gap_qp:20.6f} eV")
+            print("=" * 90 + "\n")
+        
+        else:
+            print("QUASI-PARTICLE CORRECTION NOT ENABLED.")
+            # Print energy gap
+            homo = self.valsMO[0, 0, self.occ - 1] * AU2EV
+            lumo = self.valsMO[0, 0, self.occ] * AU2EV
+            gap = lumo - homo
+            print("\n" + "=" * 90)
+            print("ENERGY GAP")
+            print("-" * 90)
+            print(f"    HOMO       :             {homo:20.6f} eV")
+            print(f"    LUMO       :             {lumo:20.6f} eV")
+            print(f"    Energy Gap :             {gap:20.6f} eV")
+            print("=" * 90 + "\n")
         
         end = time.time()
         print("*" * 90)
@@ -613,7 +656,7 @@ class BSESolver:
         
         if n_display > 0:
             print(f"{'Index':>5} {'Static (eV)':>15} {'Infinite (eV)':>15} {'Dynamic (eV)':>15} {'Residual':>15}")
-            print("-" * 100)
+            print("-" * 90)
             
             for i in range(n_display):
                 static_val = static_ev[i] if i < len(static_ev) else None
@@ -631,7 +674,7 @@ class BSESolver:
         else:
             print("No positive eigenvalues found in either calculation")
 
-        print("=" * 100)
+        print("=" * 90)
     
     def run(self):
         """Main execution method."""
