@@ -96,9 +96,9 @@ Some useful parameter definitions:
 Try it out now!
 -------------
 
-We have provided an example of dinitrogen molecule in the `cc-pvdz` basis set. 
+We have provided an example of dinitrogen molecule in the `STO-3G` basis set. 
 It is a small enough system that you can run on your desktop.
-In '/example/N2_ccpvdz', you can find all the output you needed from DFT and sc*GW* calculations. 
+In '/example/N2_STO3G', you can find all the output you needed from DFT and sc*GW* calculations. 
 
 Simply run:
 
