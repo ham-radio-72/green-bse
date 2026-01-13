@@ -32,10 +32,10 @@ def plot_spectral_function(pole_loc, pole_str, eta, wmin=0, wmax=20, npts=2000):
 
     plt.figure(figsize=(6,3))
     plt.plot(w, A)
-    plt.xlabel("ω")
+    plt.xlabel("ω (eV)")
     plt.ylabel("A(ω)")
     plt.xlim(wmin, wmax)
-    plt.title("BSE Spectral Function")
+    # plt.title("BSE Plasmon-Pole Model Fitted Spectral Function")
     plt.tight_layout()
     # plt.show()
     
@@ -52,7 +52,7 @@ def main():
         help="Maximum frequency for plotting (in units of eV)."
     )
     parser.add_argument(
-        "--eta", type=float, default=1e-4,
+        "--eta", type=float, default=1e-2,
         help="Broadening factor for plotting (in units of Hartree)."
     )
     parser.add_argument(
@@ -72,7 +72,6 @@ def main():
 
     plot_spectral_function(pole_loc, pole_str, eta, wmax=w_max)
     plt.savefig(plot_file, dpi=300)
-
 
 if __name__ == "__main__":
     main()
