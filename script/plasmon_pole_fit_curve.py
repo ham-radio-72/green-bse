@@ -71,7 +71,7 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
     w_stat = abs((1/F0).real)
     
     plt.figure(figsize=(6,3))
-    plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real, 'x', label='Original F', markersize=4)
+    plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real, 'x', label='Original F(iΩ)', markersize=4)
     plt.plot(wgrid, plasPole_fit.real, '-', label='Plasmon-Pole Fit')    
     # plt.plot(wgrid, -w_stat/(wgrid**2+w_stat**2), '-', label='Static Limit')    
     plt.xlabel("iΩ")
@@ -79,8 +79,9 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
     plt.legend()
     plt.xlim(-10, 10)
     # plt.ylim(-11, -9)
-    plt.title("Comparison of Original F(iΩ) and Plasmon-Pole Fit, Excitation {}".format(exc_idx))
-    plt.annotate("w_stat = {:.4f} eV\nw_pole = {:.4f} eV\nRes = {:.4f}".format(w_stat * AU2EV,w_pole * AU2EV, res_norm[true_exc_idx]),
+    # plt.title("Comparison of Original F(iΩ) and Plasmon-Pole Fit, Excitation {}".format(exc_idx))
+    plt.annotate("Static ω = {:.4f} eV\nPole ω = {:.4f} eV\nResidual = {:.4f}".format(
+                 w_stat * AU2EV,w_pole * AU2EV, res_norm[true_exc_idx]),
                  xy=(0.65, 0.1), xycoords='axes fraction',
                  bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
@@ -133,12 +134,12 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_nor
     # plt.plot(wgrid, -w_stat/(wgrid**2+w_stat**2), '-', label='Static Limit')  
     plt.axhline(0, color='black', linestyle='--', linewidth=0.8)  
     plt.xlabel("iΩ")
-    plt.ylabel("$\Delta$")
+    plt.ylabel("Fit Error")
     plt.legend()
     plt.xlim(-10, 10)
     # plt.ylim(-11, -9)
-    plt.title("Comparison of Original F(iΩ) and Plasmon-Pole Fit, Excitation {}".format(exc_idx))
-    plt.annotate("Res = {:.4f}".format(res_norm[true_exc_idx]),
+    # plt.title("Comparison of Original F(iΩ) and Plasmon-Pole Fit, Excitation {}".format(exc_idx))
+    plt.annotate("Residual = {:.4f}".format(res_norm[true_exc_idx]),
                  xy=(0.65, 0.1), xycoords='axes fraction',
                  bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
@@ -158,7 +159,7 @@ def main():
         help="Input of IR grid file"
     )
     parser.add_argument(
-        "--plot_file", type=str, default="plasmon_pole.png",
+        "--plot_file", type=str, default="plasmon_pole.pdf",
         help="File name for saving the plot."
     )
     parser.add_argument(
