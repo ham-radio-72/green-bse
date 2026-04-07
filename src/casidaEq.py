@@ -11,64 +11,81 @@ import numpy as np
 import h5py
 import scipy.linalg as LA
 from joblib import Parallel, delayed 
+from scipy.linalg import matrix_balance
 
 
 def matEleXiStat(VQ, W, nelec, type="normal"):
-    """Calculate static Xi matrix element for BSE.
+    """
+    Calculate static matrix block A for BSE.
     A(ia,jb) = Eps(ia,jb) + U(ia,bj) - W(ij,ab)
     VQ is in the form of V_{Qij}, in OV basis.
     """
     occ = nelec // 2
     virt = VQ.shape[-1] - occ
+    kappa = 1.0
+    
     # i (occ), a (virt), j (occ), b (virt)
     Xi = np.zeros((occ, virt, occ, virt), dtype=np.complex128)
-    
     if (type != "singlet") and (type != "triplet"):
+        kappa = 1.0
         U = np.einsum('qia,qjb->iajb', VQ[0, :, :occ, occ:], VQ[0, :, :occ, occ:], optimize='optimal')
-        Xi += U - W.transpose([0, 2, 1, 3])
     elif type == "singlet":
+        kappa = 2.0
         U = np.einsum('qia,qjb->iajb', VQ[0, :, :occ, occ:], VQ[0, :, :occ, occ:], optimize='optimal')
-        Xi += 2 * U - W.transpose([0, 2, 1, 3])
     elif type == "triplet":
-        Xi += -W.transpose([0, 2, 1, 3])
+        kappa = 0.0
+
+    for a in range(virt):
+        for j in range(occ):
+            for b in range(virt):
+                if type == "triplet":
+                    # For triplet excitations, the exchange term is zero.
+                    Xi[:, a, j, b] = - W[:, j, b, a]
+                else:
+                    Xi[:, a, j, b] = kappa * U[:, a, j, b] - W[:, j, b, a]
     
     return Xi
 
 
 def matEleBStat(VQ, W, nelec, type="normal"):
-    """Calculate static B matrix element for BSE.
+    """
+    Calculate static matrix block B for BSE.
     B(ia,jb) = U(ia,bj) - W(ib,aj)
     VQ is in the form of V_{Qij}, in OV basis.
     """
-    nao = VQ.shape[-1]
     occ = nelec // 2
-    virt = nao - occ
+    virt = VQ.shape[-1] - occ
+    kappa = 1.0
     B = np.zeros((occ, virt, occ, virt), dtype=np.complex128)
     
     if (type != "singlet") and (type != "triplet"):
-        # U shape is (occ,virt,virt,occ)
-        # B shape is (occ,virt,occ,virt)
-        U = np.einsum('qia,qbj->iabj', VQ[0, :, :occ, occ:], VQ[0, :, occ:, :occ], optimize='optimal')
-        for a in range(virt):
-            for j in range(occ):
-                for b in range(virt):
-                    B[:, a, j, b] = U[:, a, b, j] - W[:, b, a, j]
+        kappa = 1.0
+        U = np.einsum('qia,qjb->iajb', VQ[0, :, :occ, occ:], VQ[0, :, occ:, :occ], optimize='optimal')
     elif type == "singlet":
-        U = np.einsum('qia,qbj->iabj', VQ[0, :, :occ, occ:], VQ[0, :, occ:, :occ], optimize='optimal')
-        for a in range(virt):
-            for j in range(occ):
-                for b in range(virt):
-                    B[:, a, j, b] = 2 * U[:, a, b, j] - W[:, b, a, j]
+        kappa = 2.0
+        U = np.einsum('qia,qjb->iajb', VQ[0, :, :occ, occ:], VQ[0, :, occ:, :occ], optimize='optimal')
     elif type == "triplet":
-        for a in range(virt):
-            for j in range(occ):
-                for b in range(virt):
-                    B[:, a, j, b] = -W[:, b, a, j]
+        kappa = 0.0
+    
+    # U shape is (occ,virt,virt,occ)
+    # B shape is (occ,virt,occ,virt)
+    for a in range(virt):
+        for j in range(occ):
+            for b in range(virt):
+                if type == "triplet":
+                    # For triplet excitations, the exchange term is zero.
+                    B[:, a, j, b] = - W[:, b, j, a]
+                else:
+                    B[:, a, j, b] = kappa * U[:, a, b, j] - W[:, b, j, a]
 
     return B
 
 
 def fix_phase(mo):
+    """
+    Fix the phase of the molecular orbitals so that 
+    the largest component is real and positive.
+    """
     for i in range(mo.shape[1]):
         k = np.argmax(np.abs(mo[:, i]))  # index of largest element
         phase = np.angle(mo[k, i])
@@ -77,7 +94,10 @@ def fix_phase(mo):
 
 
 def solveMO(F, S, eigh_solver=LA.eigh, thr=1e-7):
-    # print("*****    Solving Fock    *****")
+    """
+    Solve the generalized eigenvalue problem F C = S C E for each k-point and spin channel.
+    F and S are in the shape of (ns, nk, nao, nao).
+    """
     ns, nk, nao = F.shape[0:3]
     eiv_sk = np.zeros((ns, nk, nao))
     mo_coeff_sk = np.zeros((ns, nk, nao, nao), dtype=F.dtype)
@@ -156,14 +176,21 @@ def effVex2AO(effVex, moVex, nelec):
 
 
 def mo2ovStat(mat4PStat_mo):
-    # occ  = nelec//2
-    # mat4PStat_ov = mat4PStat_mo[:occ,occ:,:occ,occ:]
+    """
+    This is an empty placeholder function because matrices are 
+    already in OV basis after transformation.
+    In case we need to do some reordering or reshaping, we can implement it here.
+    """
     mat4PStat_ov = mat4PStat_mo[:]
 
     return mat4PStat_ov
 
 
 def diffEpsMat(eigVals,nelec):
+    """
+    Calculate the difference in orbital energies for occupied and virtual orbitals.
+    Return a 4D array of shape (n_occ, n_virt, n_occ, n_virt) used in building block A.
+    """
     nao = len(eigVals)
     nocc = nelec // 2
     nvirt = nao - nocc
@@ -179,8 +206,8 @@ def diffEpsMat(eigVals,nelec):
 
 def concatAB(A,B):
     """
-    Concatenate two matrices A and B into a block matrix.
-    For static version.
+    Concatenate two matrices A and B into the effective Hamiltonian.
+    Only for static solution.
     """
     block_dim = A.shape[-1]
     temp = np.zeros((2*block_dim,2*block_dim),dtype=np.complex128)
@@ -193,6 +220,9 @@ def concatAB(A,B):
 
 
 def getDiffEps(valsMO,nelec):
+    """
+    Get the difference in orbital energies for occupied and virtual orbitals.
+    """
     nao   = valsMO.shape[-1]
     occ   = nelec // 2
     virt  = nao - occ
@@ -209,7 +239,7 @@ def getDiffEps(valsMO,nelec):
 
 def HinfDiagApprox(effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
     """
-    Solve the Hamiltonian (iomega -> infinity) 
+    Solve the Hamiltonian in the limit(iomega -> infinity). 
     Must be in MO basis already.
     return the diagonalized H_inf matrix.
     """
@@ -218,8 +248,10 @@ def HinfDiagApprox(effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
     diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
     nao  = VQ.shape[-1]
     virt = nao - occ
+    # n_occ * n_occ * n_virt * n_virt
     U1   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,:occ], VQ[0,:,occ:,occ:], optimize='optimal')
-    U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
+    # n_occ * n_virt * n_occ * n_virt
+    U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,:occ,occ:], optimize='optimal')
     
     # Diagonal approximation to H2p_Dyn at each frequency point.
     H2p_inf = np.zeros((2*occ*virt),dtype=np.complex128)
@@ -247,7 +279,7 @@ def HinfDiagApprox(effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
 
 def HStatDiagApprox(Pi_stat,effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
     """
-    Solve the Hamiltonian (iomega -> infinity) 
+    Solve the Hamiltonian in the limit (iomega -> infinity). 
     Must be in MO basis already.
     return the diagonalized H_stat matrix.
     """
@@ -272,8 +304,9 @@ def HStatDiagApprox(Pi_stat,effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
         PV  = np.einsum("qp,pkl->qkl", Pi_stat, VQ[0,:,occ:,:occ], optimize='optimal') 
         # ijkl: Nocc * Nvirt * Nvirt * Nocc
         VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
-        # ijkl: Nocc * Nvirt * Nvirt * Nocc 
-        U   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
+        # U   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
+        # ijkl: Nocc * Nvirt * Nocc * Nvirt 
+        U   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,:occ,occ:], optimize='optimal')
         W_stat  = VPV + U
         B_stat = matEleBStat(VQ,W_stat,nelec,ex_type)
     else:
@@ -297,7 +330,10 @@ def HStatDiagApprox(Pi_stat,effVex,VQ,valsMO,nelec,ex_type="singlet",tda=0):
 
 
 def initG2p_inv(H2p_inf,ir_file,beta=1000):
-    # Initial diagonlaized G2p from H2p at iomega -> inf.
+    """
+    Initialize the diagonlaized two-particle response function
+    G2p^(-1) from H2p at limit (iomega -> inf).
+    """
     # legacy support
     # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
     # green-mbpt support
@@ -308,13 +344,15 @@ def initG2p_inv(H2p_inf,ir_file,beta=1000):
     G2p_inv_init = np.zeros((niw,H2p_inf.shape[0]),dtype=np.complex128)
     for iw in range(niw):
         # G2p_inv_init[iw,:] = (1j * wgrid[iw] - H2p_inf)
-        G2p_inv_init[iw,:] = (wgrid[iw]**2 + H2p_inf**2)/(-2*H2p_inf)
+        G2p_inv_init[iw,:] = (wgrid[iw]**2 + H2p_inf**2)/(-H2p_inf)
 
     return G2p_inv_init
 
 
 def G2p_inv(H2p,ir_file,beta=1000):
-    # diagonlaized G2p from H2p at all iomega.
+    """
+    Diagonalized G2p from H2p at all iomega.
+    """
     # legacy support
     # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
     # green-mbpt support
@@ -325,13 +363,15 @@ def G2p_inv(H2p,ir_file,beta=1000):
     G2p_inv = np.zeros((niw,H2p.shape[1]),dtype=np.complex128)
     for iw in range(niw):
         # G2p_inv[iw,:] = (1j * wgrid[iw] - H2p[iw,:])
-        G2p_inv[iw,:] = (wgrid[iw]**2 + H2p[iw,:]**2)/(-2*H2p[iw,:])
+        G2p_inv[iw,:] = (wgrid[iw]**2 + H2p[iw,:]**2)/(-H2p[iw,:])
 
     return G2p_inv
 
 
 def G2p(H2p,ir_file,beta=1000):
-    # diagonlaized G2p from H2p at all iomega.
+    """
+    Build the two-particle response function G2p from H2p at all iomega.
+    """
     # legacy support
     # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
     # green-mbpt support
@@ -339,87 +379,28 @@ def G2p(H2p,ir_file,beta=1000):
     wgrid = 2 * wgrid * np.pi / beta
     niw = len(wgrid)
 
-    G2p_inv = np.zeros((niw,H2p.shape[1]),dtype=np.complex128)
+    G2p = np.zeros((niw,H2p.shape[1]),dtype=np.complex128)
     for iw in range(niw):
-        # G2p_inv[iw,:] = (1j * wgrid[iw] - H2p[iw,:])
-        G2p_inv[iw,:] = -H2p[iw,:]/(wgrid[iw]**2 + H2p[iw,:]**2)
+        # G2p[iw,:] = 1 / (1j * wgrid[iw] - H2p[iw,:])
+        G2p[iw,:] = -H2p[iw,:]/(wgrid[iw]**2 + H2p[iw,:]**2)
 
-    return G2p_inv
-
-
-def _process_update_frequency_point(
-    iw, G2p_iw_inv, Pi, effVex_inv, effVex, VQ, occ, virt, firstOrder=True
-    ):
-    """Helper function to process a single frequency point."""
-    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,occ:], optimize='optimal') 
-    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,:occ], PV, optimize='optimal')
-    A   = -VPV.transpose([0,2,1,3])
-    A   = A.reshape(occ*virt,occ*virt)
-    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal') 
-    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
-    B   = -np.einsum("ibaj->iajb",VPV) 
-    B   = B.reshape(occ*virt,occ*virt)
-    W2p = concatAB(A,B)
-    W2p = np.einsum('ij,jk,kl->il', effVex_inv, W2p, effVex, optimize='optimal') 
-    # calculate Sigma2p in imag frequency domain.
-    # G2p = 1.0/G2p_iw_inv[iw,:]
-    if firstOrder:
-        Sigma2p = W2p 
-    else:
-        raise NotImplementedError("Modified BSE kernel not implemented yet.")
-    return np.diag(LA.inv(np.diag(G2p_iw_inv[iw]) - Sigma2p))
-
-
-def updateG2p_alt(G2p_iw_inv,Pi,effVex,VQ,nelec,n_jobs=-1,firstOrder=True):
-    """
-    G2p is the correlated two-particle Green's function. (or polarization propagator Pi)
-    firstOrder means G2p and G2p (non-interacting) is only mediated by the BSE kernel 
-    in the Feynman diagram.
-    This option is reserved for possible future implementation of a corrected BSE kernel, 
-    or a different form of kernel.
-    """
-    # Must be in MO basis already.
-    # Only keep the diagonal elements.
-    occ  = nelec // 2
-    virt = VQ.shape[-1] - occ
-    niw  = Pi.shape[0]  # always odd
-    niw_half = niw // 2 + 1
-    occ  = nelec // 2
-    nao  = VQ.shape[-1]
-    virt = nao - occ
-    effVex_inv = LA.inv(effVex)
-    
-    # Diagonal approximation to H2p_Dyn at each frequency point.
-    # Parallelize over frequency points (half)
-    results = Parallel(n_jobs=n_jobs, backend='threading')(
-        delayed(_process_update_frequency_point)(
-            iw, G2p_iw_inv, Pi, effVex_inv, effVex, VQ, occ, virt, firstOrder=firstOrder
-        # ) for iw in range(niw)
-        ) for iw in range(niw_half)
-    )
-    
-    # Collect results (always symmetric)
-    G2p_updated_iw = np.zeros((niw,2*occ*virt),dtype=np.complex128)
-    for iw, result in enumerate(results):
-        G2p_updated_iw[iw] = result
-    for iw, result in enumerate(results):
-        G2p_updated_iw[niw - 1 - iw] = result
-    
-    return G2p_updated_iw
+    return G2p
 
 
 def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2):
-    """Helper function to process HDyn for a single frequency point."""
+    """
+    Helper function for HDyn process threading at each single frequency point.
+    """
     PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,occ:], optimize='optimal') 
     VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,:occ], PV, optimize='optimal')
     # ijkl: Nocc * Nocc * Nvirt * Nvirt
     W   = VPV + U1
     A   = matEleXiStat(VQ,W,nelec,ex_type)
     A   = diffEps_ov + A.reshape(occ*virt,occ*virt)
-    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal') 
-    # ijkl: Nocc * Nvirt * Nvirt * Nocc
+    # PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal') 
+    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,:occ,occ:], optimize='optimal') 
+    # ijkl: Nocc * Nvirt * Nocc * Nvirt
     VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
-    # ijkl: Nocc * Nvirt * Nvirt * Nocc
     W   = VPV + U2
     B   = matEleBStat(VQ,W,nelec,ex_type)
     B   = B.reshape(occ*virt,occ*virt)
@@ -427,72 +408,12 @@ def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_o
     return np.einsum('ij,jk,ki->i', effVex_inv, H, effVex)
 
 
-def GDyn(Pi,effVex,VQ,valsMO,nelec,ir_file,ex_type="singlet",n_jobs=-1,beta=1000):
-    # Must be in MO basis already.
-    # reorder from lowet to highest in case of energy reshuffle.
-    # legacy support
-    # wgrid = h5py.File(ir_file,"r")["/bose/wsample"][()]
-    # green-mbpt support
-    wgrid = h5py.File(ir_file,"r")["/bose/ngrid"][()]
-    wgrid = 2 * wgrid * np.pi / beta
-    niw = len(wgrid)
-    occ  = nelec // 2
-    virt = VQ.shape[-1] - occ
-    diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
-    niw_half = niw // 2 + 1
-    effVex_inv = LA.inv(effVex)
-    occ  = nelec // 2
-    nao  = VQ.shape[-1]
-    virt = nao - occ
-    U1   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,:occ], VQ[0,:,occ:,occ:], optimize='optimal')
-    U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
-    # Diagonal approximation to H2p_Dyn at each frequency point.
-    # Parallelize over frequency points
-    results = Parallel(n_jobs=n_jobs, backend='threading')(
-        delayed(_process_gdyn_frequency_full)(
-            iw, wgrid, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2
-        ) for iw in range(niw)
-    )
-    
-    # Collect results (always symmetric)
-    G2p_Dyn = np.zeros((niw,2*occ*virt),dtype=np.complex128)
-    for iw, result in enumerate(results):
-        G2p_Dyn[iw] = result
-    # for iw, result in enumerate(results):
-    #     G2p_Dyn[niw - 1 - iw] = result
-    
-    G2p_Dyn = symmetrizeH2p(G2p_Dyn)
-    # return effVals, G2p_Dyn, valsMO
-    return G2p_Dyn
-
-
-def _process_gdyn_frequency_full(iw, wgrid, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2):
-    """Helper function to process GDyn for a single frequency point."""
-    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,occ:], optimize='optimal') 
-    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,:occ], PV, optimize='optimal')
-    # ijkl: Nocc * Nocc * Nvirt * Nvirt
-    W   = VPV + U1
-    A   = matEleXiStat(VQ,W,nelec,ex_type)
-    A   = diffEps_ov + A.reshape(occ*virt,occ*virt)
-    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal') 
-    # ijkl: Nocc * Nvirt * Nvirt * Nocc
-    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
-    # ijkl: Nocc * Nvirt * Nvirt * Nocc
-    W   = VPV + U2
-    B   = matEleBStat(VQ,W,nelec,ex_type)
-    B   = B.reshape(occ*virt,occ*virt)
-    H   = concatAB(A,B)
-    # diagonalize H
-    np.einsum('ij,jk,kl->il', effVex_inv, H, effVex)
-    I   = np.eye(H.shape[0],dtype=np.complex128)
-    G   = LA.inv(1j * wgrid[iw] * I - H)
-
-    return np.diagonal(G)
-
-
 def HDynDiagApprox(Pi,effVex,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
-    # Must be in MO basis already.
-    # reorder from lowet to highest in case of energy reshuffle.
+    """
+    Diagonal approximation to the dynamic part of the 
+    effective Hamiltonian H2p_Dyn at each frequency point.
+    Must be in MO basis already.
+    """
     occ  = nelec // 2
     virt = VQ.shape[-1] - occ
     diffEps_ov = mo2ovStat(diffEpsMat(valsMO[0,0,:],nelec)).reshape(occ*virt,occ*virt)
@@ -503,7 +424,7 @@ def HDynDiagApprox(Pi,effVex,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
     nao  = VQ.shape[-1]
     virt = nao - occ
     U1   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,:occ], VQ[0,:,occ:,occ:], optimize='optimal')
-    U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
+    U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,:occ,occ:], optimize='optimal')
     # Diagonal approximation to H2p_Dyn at each frequency point.
     # Parallelize over frequency points
     results = Parallel(n_jobs=n_jobs, backend='threading')(
@@ -537,8 +458,10 @@ def symmetrizeH2p(H2p):
 
 
 def _process_hdyn_tda_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1):
-    """Helper function to process HDyn TDA for a single frequency point."""
-    # PV  = np.einsum("qp,pkl->qkl", Pi[iw,:], VQ[0,:,occ:,occ:], optimize='optimal') 
+    """
+    Helper function for HDyn process threading at each single frequency point.
+    Only for TDA approximation, where B block is zero.
+    """
     PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,occ:], optimize='optimal') 
     # ijkl: Nocc * Nocc * Nvirt * Nvirt
     VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,:occ], PV, optimize='optimal')
@@ -552,7 +475,12 @@ def _process_hdyn_tda_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffE
 
 
 def HDynDiagApprox_TDA(Pi,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
-    # Must be in MO basis already.
+    """
+    Diagonal approximation to the dynamic part of the 
+    effective Hamiltonian H2p_Dyn at each frequency point.
+    Must be in MO basis already.
+    Only for TDA approximation, where B block is zero.
+    """
     diffEps_ov = getDiffEps(valsMO,nelec)
     niw  = Pi.shape[0] 
     niw_half = niw // 2 + 1
@@ -581,6 +509,10 @@ def HDynDiagApprox_TDA(Pi,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
 
 
 def solveHstatic(Pi_stat,VQ,diffEps_ov,nelec,ex_type="singlet",tda=0):
+    """
+    Solve the static effective Hamiltonian H_stat for the eigenvalues and eigenvectors.
+    The concated H_stat is also returned for book-keeping purposes.
+    """
     # Must be in MO basis already.
     occ  = nelec // 2
     nao  = VQ.shape[-1]
@@ -598,12 +530,12 @@ def solveHstatic(Pi_stat,VQ,diffEps_ov,nelec,ex_type="singlet",tda=0):
     
     if not tda:
         print("TDA approximation is disabled. Solving full effective Hamiltonian.")
-        # Qkl: NQ * Nvirt * Nocc
-        PV  = np.einsum("qp,pkl->qkl", Pi_stat, VQ[0,:,occ:,:occ], optimize='optimal') 
-        # ijkl: Nocc * Nvirt * Nvirt * Nocc
+        # Qkl: NQ * Nocc * Nvirt
+        PV  = np.einsum("qp,pkl->qkl", Pi_stat, VQ[0,:,:occ,occ:], optimize='optimal') 
+        # ijkl: Nocc * Nvirt * Nocc * Nvirt
         VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
-        # ijkl: Nocc * Nvirt * Nvirt * Nocc 
-        U   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,occ:,:occ], optimize='optimal')
+        # ijkl: Nocc * Nvirt * Nocc * Nvirt
+        U   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,:occ,occ:], optimize='optimal')
         W_stat  = VPV + U
         B_stat = matEleBStat(VQ,W_stat,nelec,ex_type)
     else:
@@ -617,9 +549,7 @@ def solveHstatic(Pi_stat,VQ,diffEps_ov,nelec,ex_type="singlet",tda=0):
     # check condition number.
     cond = np.linalg.cond(H_stat)
     print(f" Solving non-Hermitian eigenvalue equation. Condition number = {cond:10.4f}")
-    # effVals,effVex = LA.eig(H_stat)
     
-    from scipy.linalg import matrix_balance
     # balance matrix
     H_stat_balanced, scale = matrix_balance(H_stat)
     effVals,effVex = LA.eig(H_stat_balanced)
@@ -628,6 +558,5 @@ def solveHstatic(Pi_stat,VQ,diffEps_ov,nelec,ex_type="singlet",tda=0):
     # fix sign ambiguity
     idx = np.argmax(abs(effVex.real), axis=0)
     effVex[:,effVex[idx,np.arange(len(effVals))].real<0] *= -1
-    # effVex is of the shape (2ov,2ov)
 
     return effVals, effVex, H_stat

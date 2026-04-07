@@ -20,7 +20,7 @@ import numpy as np
 import qp
 import plasPole
 
-
+# optional imports for system monitoring
 try:
     import psutil
     import multiprocessing as mp
@@ -34,7 +34,11 @@ AU2EV = 27.211386245981
 
 @dataclass
 class BSEConfig:
-    """Configuration class for BSE calculations."""
+    """
+    Configuration class for BSE calculations.
+    Default values are provided for all parameters, 
+    which can be overridden by command line arguments.
+    """
     __version__ = "0.1.0"
     # File paths
     input_file: str = "input.h5"
@@ -63,7 +67,9 @@ class BSEConfig:
     
     @classmethod
     def from_args(cls, args):
-        """Create configuration from parsed arguments."""
+        """
+        Create configuration from parsed arguments.
+        """
         return cls(
             input_file=args.input,
             sim_file=args.sim,
@@ -86,7 +92,11 @@ class BSEConfig:
 
 
 class SystemMonitor:
-    """System monitoring utilities."""
+    """
+    System monitoring utilities.
+    Only enabled if psutil and joblib are available 
+    and monitoring is enabled in the config.
+    """
     
     def __init__(self, enabled: bool = True):
         self.enabled = enabled and MONITORING_AVAILABLE
@@ -116,7 +126,9 @@ class SystemMonitor:
             print(f"System monitoring not available: {e}")
     
     def print_process_info(self):
-        """Print current process information."""
+        """
+        Print current process information.
+        """
         if not self.enabled:
             return
             
@@ -136,7 +148,9 @@ class SystemMonitor:
             print(f"Process monitoring not available: {e}")
     
     def print_joblib_info(self, n_jobs):
-        """Print joblib parallelization information."""
+        """
+        Print joblib parallelization information.
+        """
         if not self.enabled:
             print(f"Parallelization info: n_jobs={n_jobs}")
             return
@@ -158,7 +172,9 @@ class SystemMonitor:
             print(f"Parallelization info: n_jobs={n_jobs} (monitoring unavailable): {e}")
     
     def estimate_memory_requirements(self, nao, nelec, niw):
-        """Crude estimatation of memory requirements for BSE calculations."""
+        """
+        Crude estimation of memory requirements for BSE calculations.
+        """
         occ = nelec // 2
         virt = nao - occ
         
@@ -166,10 +182,9 @@ class SystemMonitor:
         VQ_mb = (nao**3 * 16) / (1024**2)  # VQ matrix
         Pi_mb = (niw * nao**2 * 16) / (1024**2)  # Pi matrix
         G2p_mb = (niw * 2 * occ * virt * 16) / (1024**2)  # G2p matrices
-        Sigma2p_mb = (niw * 4 * occ**2 * virt**2 * 16) / (1024**2)  # Sigma2p matrices
-        working_mb = (4 * occ**2 * virt**2 * 16) / (1024**2)  # Working arrays
+        working_mb = 4 * (occ**2 * virt**2 * 16) / (1024**2)  # Working arrays
 
-        total_mb = VQ_mb + Pi_mb + G2p_mb + Sigma2p_mb + working_mb
+        total_mb = VQ_mb + Pi_mb + G2p_mb + working_mb
 
         print("=" * 90)
         print("MEMORY ESTIMATES")
@@ -197,9 +212,12 @@ class SystemMonitor:
 
 
 class BSESolver:
-    """BSE Casida equation solver."""
+    """BSE Casida equation solver class."""
     
     def __init__(self, config: BSEConfig):
+        """
+        Initialize the calculation setup with placeholder values.
+        """
         self.config = config
         self.monitor = SystemMonitor(config.monitoring_enabled)
         
@@ -217,6 +235,7 @@ class BSESolver:
     def print_python_info(self):
         """Print Python environment information."""
         print("PYTHON ENVIRONMENT")
+        print(f"BSE    version:  {self.config.__version__}")
         print(f"python version:  {platform.python_version()}")
         print(f"numpy  version:  {np.__version__}")
         print(f"scipy  version:  {scipy.__version__}")
@@ -224,12 +243,13 @@ class BSESolver:
         print(f"pyscf  version:  {pyscf.__version__}")
     
     def print_header(self):
-        """Print calculation header."""
+        """Print output header."""
         print("=" * 90)
         print("BSE CASIDA EQUATION SOLVER")
         print("FOR MATUSBARA GREEN'S FUNCTION")
-        print("Copyright (c) 2025 Ming Wen <wenm@umich.edu>, University of Michigan.")
-        print("                   Gaurav Harsha <gharsha@umich.edu>, University of Michigan.")
+        print("Copyright (c) 2025-2026 ")
+        print("    Ming Wen <wenm@umich.edu>, University of Michigan.")
+        print("    Gaurav Harsha <gharsha@umich.edu>, University of Michigan.")
         
         print("-" * 90)
         self.print_python_info()
@@ -254,7 +274,7 @@ class BSESolver:
         print("*" * 90)
         
     def load_input_data(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Load input data from HDF5 files."""
+        """Load input data from scGW HDF5 files."""
         start = time.time()
         
         print("Reading IR file")
@@ -287,7 +307,9 @@ class BSESolver:
             
             if it == 1:
                 print("Reading the HF level Fock matrix for G0W0.")
+                # green-mbpt support
                 rFk = rFk_input
+                # legacy support
                 # rFk = rFk.reshape(rFk.shape[:-1])  
             else:
                 # legacy support
@@ -346,7 +368,7 @@ class BSESolver:
             )
             
             print("\n" + "=" * 90)
-            print("QUASI-PARTICLE ENERGY LEVELS COMPARISON")
+            print("QUASI-PARTICLE ENERGY LEVELS")
             print("-" * 90)
             print(f"{'Index':>8} {'Original (eV)':>20} {'QP Corrected (eV)':>20} {'Difference (eV)':>20}")
             print("-" * 90)
@@ -357,7 +379,9 @@ class BSESolver:
                 qp_ev = valsMO_qp[0, 0, i] * AU2EV
                 diff_ev = (valsMO_qp[0, 0, i] - self.valsMO[0, 0, i]) * AU2EV
                 print(f"{i:8d} {orig_ev:20.6f} {qp_ev:20.6f} {diff_ev:20.6f}")
-            
+            if n_print < len(self.valsMO[0, 0, :]):
+                print("...")
+
             print("=" * 90 + "\n")
             
             self.valsMO = valsMO_qp
@@ -439,7 +463,12 @@ class BSESolver:
         return VQ, tildeP_iw
     
     def solve_bse_equations(self, VQ: np.ndarray, tildeP_iw: np.ndarray):
-        """Solve BSE equations."""
+        """
+        Solve BSE equations after all matrices are prepared.
+        The infinity solution is also saved for book-keeping and comparison purposes.
+        G2p refer to the two-particle response function, 
+        which is referred to as an auxiliary function F in the manuscript.
+        """
         niw = tildeP_iw.shape[0]
         
         if not self.config.tda_enabled:
@@ -474,14 +503,14 @@ class BSESolver:
             effVex_static  = effVex_static[:, idx]
             effVex_occ_ao  = effVex_occ_ao[:, idx] 
             effVex_virt_ao = effVex_virt_ao[:, idx]
+            niw = H2p_dyn.shape[0]
             
-            G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
-            
-            niw = G2p_iw_init_inv.shape[0]
-            
-            G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
-            for iw in range(niw):
-                G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
+            # Initiaize the two-particle response function from H2p_inf for referential purposes.
+            # Not saved in putput file but can be useful for debugging and comparison.
+            # G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
+            # G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
+            # for iw in range(niw):
+            #     G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
             
             G2p_iw_updated = casida.G2p(H2p_dyn, self.config.ir_file, self.config.beta)
 
@@ -492,7 +521,7 @@ class BSESolver:
             )
             
             self.results.update({
-                'G2p_iw_init': G2p_iw_init,
+                # 'G2p_iw_init': G2p_iw_init,
                 'G2p_iw_updated': G2p_iw_updated,
                 'G2p_tau_updated': G2p_tau_updated,
                 'H2p_inf': H2p_inf,
@@ -510,94 +539,6 @@ class BSESolver:
             print("TDA approximation is not fully implemented yet. Exiting.")
             raise NotImplementedError("TDA approximation not implemented")
     
-    def solve_bse_equations_full(self, VQ: np.ndarray, tildeP_iw: np.ndarray):
-        """Solve BSE equations."""
-        niw = tildeP_iw.shape[0]
-        
-        if not self.config.tda_enabled:
-            diffEps_ov = casida.mo2ovStat(
-                casida.diffEpsMat(self.valsMO[0, 0, :], self.nelec)
-            ).reshape(self.occ * self.virt, self.occ * self.virt)
-
-            effVals_static, effVex_static, H_stat = casida.solveHstatic(
-                tildeP_iw[niw//2, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
-                ex_type=self.config.excitation_type, tda=0
-            )
-            
-            # discard imaginary part due to non-hermitian Hamiltonian (ill-conditioned)
-            effVex_static = effVex_static.real 
-            
-            effVals_static = casida.HStatDiagApprox(
-                tildeP_iw[niw//2, 0, :, :, 0], effVex_static, VQ, self.valsMO, self.nelec, self.config.excitation_type
-            )
-            
-            H2p_inf = casida.HinfDiagApprox(
-                effVex_static, VQ, self.valsMO, self.nelec, self.config.excitation_type
-            )
-            
-            effVex_occ_ao, effVex_virt_ao = casida.effVex2AO(
-                effVex_static, self.vexMO[0, 0, :], self.nelec
-            )
-            
-            # Sort eigenvalues and eigenvectors by eigenvalues
-            idx = np.argsort(effVals_static)
-            effVals_static = effVals_static[idx]
-            H2p_inf = H2p_inf[idx]
-            effVex_static  = effVex_static[:, idx]
-            effVex_occ_ao  = effVex_occ_ao[:, idx] 
-            effVex_virt_ao = effVex_virt_ao[:, idx]
-            
-            G2p_iw_init_inv = casida.initG2p_inv(H2p_inf.real, self.config.ir_file, self.config.beta)
-            
-            # diagonalization
-            niw = G2p_iw_init_inv.shape[0]
-            
-            G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
-            for iw in range(niw):
-                G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
-            
-            if self.config.monitoring_enabled:
-                self.monitor.monitor_memory("Before updateG2p_alt")
-                print(f" Starting updateG2p_alt with n_jobs={self.config.n_jobs}")
-                
-            G2p_iw_updated = casida.updateG2p_alt(
-                G2p_iw_init_inv, tildeP_iw, effVex_static, VQ, 
-                self.nelec, self.config.n_jobs, firstOrder=True
-            )   
-                            
-            if self.config.monitoring_enabled:
-                self.monitor.monitor_memory("After updateG2p_alt")
-                
-            G2p_tau_updated = ct.omega2tauFT(G2p_iw_updated, self.config.beta, self.config.ir_file)
-            
-            wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update(
-                G2p_iw_updated, self.config.ir_file, beta=self.config.beta
-            )
-            
-            # wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update_two_pole(
-            #     G2p_iw_updated, self.config.ir_file, beta=self.config.beta
-            # )
-            
-            self.results.update({
-                'G2p_iw_init': G2p_iw_init,
-                'G2p_iw_updated': G2p_iw_updated,
-                'G2p_tau_updated': G2p_tau_updated,
-                'H2p_inf': H2p_inf,
-                # 'H_stat': H_stat, 
-                'effVals_static': effVals_static,
-                'effVex_static': effVex_static,
-                'pole_fit': wpole_data,
-                'S_fit': S_data,
-                'residual_norm_fit': res_norm_data,
-                'occ_AO_indices': effVex_occ_ao,
-                'virt_AO_indices': effVex_virt_ao
-            })
-            
-        else:
-            print("TDA approximation is not fully implemented yet. Exiting.")
-            raise NotImplementedError("TDA approximation not implemented")
-    
-
     def save_results(self):
         """Save calculation results to HDF5 file."""
         start = time.time()
@@ -614,7 +555,6 @@ class BSESolver:
             f["/MOvals/data"] = self.valsMO
             f["/AOindices/occ"] = self.results['occ_AO_indices']
             f["/AOindices/virt"] = self.results['virt_AO_indices']
-            # f["/H_stat/data"] = self.results['H_stat']
         
         end = time.time()
         print("*" * 90)
@@ -624,8 +564,8 @@ class BSESolver:
     def print_results(self):
         """Print calculation results."""
         print("=" * 100)
-        print("EXCITATION EIGENVALUES (eV)")
-        print("Only printing the first 20 positive eigenvalues from each calculation.")
+        print("NEUTRAL EXCITATIONS")
+        print("Only printing the first 20 positive eigenvalues.")
         print("-" * 100) 
         
         # Get eigenvalues
@@ -671,6 +611,7 @@ class BSESolver:
                 print(f"{i:5d} {static_str:>15} {inf_str:>15} {dyn_str:>15} {res_str:>15}")
                 
             print("......")
+            print("All results are saved in the output HDF5 file.")
         else:
             print("No positive eigenvalues found in either calculation")
 
@@ -720,52 +661,74 @@ class BSESolver:
                 print("=" * 90)
 
 def create_argument_parser():
-    """Create command line argument parser."""
+    """
+    Create command line argument parser.
+    This function defines all the command line arguments 
+    that can be used to configure the BSE calculation.
+    Default values are set to do singlet calculation without TDA.
+    """
     parser = argparse.ArgumentParser(
-        description="BSE Casida equation solver with object-oriented design"
+        description="BSE Casida equation solver with object-oriented design."
     )
     
     # File paths
     parser.add_argument("--input", type=str, default="input.h5",
-                        help="HDF5 file for input of scGW")
+                        help="HDF5 file path for input of scGW.")
     parser.add_argument("--sim", type=str, default="sim.h5",
-                        help="HDF5 file for output of scGW")
+                        help="HDF5 file path for output of scGW.")
     parser.add_argument("--output", type=str, default="bse.h5",
-                        help="HDF5 file for output of BSE")
+                        help="HDF5 file path for output of BSE.")
     parser.add_argument("--int_path", type=str, default="df_hf_int/",
-                        help="Path for the VQ.h5 file that contains information about the ERI.")
+                        help="Path for the VQ.h5 file that contains information about \
+                            the electronic repulsion integrals. \
+                            Note that it is the path to the folder \
+                            that contains VQ_0.h5, not the file itself.")
     parser.add_argument("--ir_file", type=str, default=None,
-                        help="HDF5 file that contains information about the IR grid.")
+                        help="HDF5 file path that contains information about the IR grid.")
     parser.add_argument("--pi_file", type=str, default="p_iw_tilde_q0.h5",
-                        help="HDF5 file that contains information about non-interacting susceptibility.")
+                        help="HDF5 file path that contains information about \
+                            non-interacting susceptibility.")
     
     # Parameters
     parser.add_argument("--beta", type=float, default=1000, 
-                        help="Inverse temperature")
+                        help="Inverse temperature. Default is 1000, which corresponds to \
+                            a temperature of about 300K.")
     parser.add_argument("--iter", type=int, default=-1,
-                        help="Iteration number of the scGW cycle to use for BSE. Default -1 means using the latest iteration.")
+                        help="Iteration number of the scGW cycle to use for BSE. \
+                            Default -1 means using the latest iteration.")
     parser.add_argument("--iter_W", type=int, default=-1,
-                        help="Iteration number of screened Coulomb W to use. Default -1 means using the latest W. \
-                        If iter_W = 1, then W will be calculated from the mean-field (HF/DFT) reference.")
+                        help="Iteration number of screened Coulomb W to use. \
+                            Default -1 means using the latest W. \
+                            If iter_W = 1, then W will be calculated \
+                            from the mean-field (HF/DFT) reference.")
     parser.add_argument("--ns", type=int, default=1,
-                        help="Number of spins (must be 1 for Casida formulation)")
+                        help="Number of spins. It must be 1 for Casida formulation \
+                            i.e. restricted calculation.")
     parser.add_argument("--type", type=str, default="singlet",
-                        help="Type of excitations (singlet or triplet).")
+                        help="Type of excitations (singlet or triplet) to be calculated. \
+                            Default is singlet.")
 
     # Calculation switches
     parser.add_argument("--qpac", type=int, default=1,
-                        help="Enable Quasi-Particle (QP) Approximation?")
+                        help="Enable Quasi-Particle (QP) Approximation? \
+                            Default is 1, which means using the QP-corrected \
+                            energy levels as input for BSE calculation.")
     parser.add_argument("--tda", type=int, default=0,
-                        help="Enable Tamm-Dancoff approximation")
+                        help="Enable Tamm-Dancoff approximation? \
+                            Default is 0, which means solving the full BSE equations.")
     parser.add_argument("--calc_pi", type=int, default=1,
-                        help="Calculate Pi on the fly. If False, read from pi_file.")
+                        help="Calculate Pi on the fly. If False, must provide a pi_file to read from. \
+                            Default is 1, which means calculating Pi from the scGW output file.")
 
     # Performance switches
     parser.add_argument("--n_jobs", type=int, default=-1,
-                        help="Number of parallel jobs for frequency loops (-1 = all cores, 1 = serial)")
+                        help="Number of parallel jobs for frequency loops (-1 = all cores, 1 = serial) \
+                            Default is -1, which means using all available cores in the node.")
     parser.add_argument("--monitor", type=int, default=1,
-                        help="Enable system monitoring and memory tracking")
+                        help="Enable system monitoring and memory tracking? \
+                            Default is 1, which means enabling system monitoring and memory tracking.")
     parser.add_argument("--debug", type=int, default=0,
-                        help="Enable debugging")
+                        help="Enable debugging mode? \
+                            Default is 0, which means disabling debugging mode.")
     
     return parser

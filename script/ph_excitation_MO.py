@@ -2,7 +2,7 @@
 #                                                                             #
 #    Copyright (c) 2025 Ming Wen <wenm@umich.edu>, University of Michigan.    #
 #                                                                             #
-#    Analyze molecular orbital (MO) data from BSE calculations and output     #
+#    Analyze virtual-occupied orbital data from BSE calculations and output   #
 #    results as molden files.                                                 #
 #    The particle-hole pair MOs are stored in each molden file for each       #
 #    excitation.                                                              #
@@ -16,55 +16,59 @@ from pyscf import gto, tools
 from pyscf import tools
 import os
 
+
 AU2EV = 27.211386245981  # Hartree to eV conversion factor
 
 def get_ao_labels(mol):
+    """
+    Output AO labels for a given molecule coordinates. 
+    """
     ao_labels = mol.ao_labels()
     return ao_labels
 
 def examine_AO(file_path, type = 'occ'):
+    """
+    Examine the AO data for occupied or virtual orbitals from the BSE output file.
+    """
+    
     with h5py.File(file_path, 'r') as f:
         # Access specific datasets
         if ('/AOindices/' + type) in f:
             num_exc = f['/AOindices/' + type].shape[1]
             ao_data = f['/AOindices/' + type][:]
             polefit_data = f['/PoleFit/data'][:]
-            # print("\nAO Data shape:", ao_data.shape)
-            # print("AO Data sample:", np.round(ao_data[:,ex_idx].real, 2))
 
     return ao_data, polefit_data, num_exc
 
 
 def write_molden(mol, occ_ao_data, virt_ao_data, ene, filename='orbital.molden'):
-        """
-        Write molecular orbitals to a molden file.
-        """
-        
-        # Ensure ao_data is 2D
-        if occ_ao_data.ndim == 1:
-            occ_ao_data = occ_ao_data.reshape(-1, 1)
-        if virt_ao_data.ndim == 1:
-            virt_ao_data = virt_ao_data.reshape(-1, 1)
-        if ene.ndim == 0:
-            ene = [ene]
-        elif isinstance(ene, np.ndarray):
-            ene = ene.tolist()
-        # Take real part if complex
-        if np.iscomplexobj(occ_ao_data):
-            occ_ao_data = occ_ao_data.real
-        if np.iscomplexobj(virt_ao_data):
-            virt_ao_data = virt_ao_data.real
-        
-        # Write molden file
-        with open(filename, 'w') as f:
-            tools.molden.header(mol, f)
-            tools.molden.orbital_coeff(mol, f, occ_ao_data)
-            tools.molden.orbital_coeff(mol, f, virt_ao_data, ene=ene)
-        
-        print(f"Molden file written to {filename}")
+    """
+    Write occupied and virtual molecular orbitals to a molden file.
+    """
+    
+    # Ensure ao_data is 2D
+    if occ_ao_data.ndim == 1:
+        occ_ao_data = occ_ao_data.reshape(-1, 1)
+    if virt_ao_data.ndim == 1:
+        virt_ao_data = virt_ao_data.reshape(-1, 1)
+    if ene.ndim == 0:
+        ene = [ene]
+    elif isinstance(ene, np.ndarray):
+        ene = ene.tolist()
+    # Take real part if complex
+    if np.iscomplexobj(occ_ao_data):
+        occ_ao_data = occ_ao_data.real
+    if np.iscomplexobj(virt_ao_data):
+        virt_ao_data = virt_ao_data.real
+    
+    # Write molden file
+    with open(filename, 'w') as f:
+        tools.molden.header(mol, f)
+        tools.molden.orbital_coeff(mol, f, occ_ao_data)
+        tools.molden.orbital_coeff(mol, f, virt_ao_data, ene=ene)
+    
+    print(f"Molden file written to {filename}")
 
-# to be added:
-# Dump hole-particle MO to a molden file.
 
 def main():
     # Set up argument parser
@@ -84,6 +88,10 @@ def main():
     parser.add_argument('--excitation_num', '-e', type=int,
                         default=1,
                         help='Excitation index to examine (default: 0)')
+    parser.add_argument('--excitation_start', type=int,
+                        default=0,
+                        help='Excitation index to start with (the lowest excitation). \
+                            Set this for inner shell excitations (default: 0)')
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose output')
     
@@ -121,11 +129,11 @@ def main():
     print("=" * 60)
     
     for i in range(args.excitation_num):
-        exc_idx = i + num_exc//2
+        exc_idx = i + num_exc//2 + args.excitation_start
         print(f"\nExamining occupied orbitals for excitation index {i}")
         print(f"Plasmon-pole energy: {polefit_data[exc_idx] * AU2EV:.4f} eV ")
         write_molden(mol, occ_ao_data[:, exc_idx], virt_ao_data[:, exc_idx], polefit_data[exc_idx] * AU2EV,
-                     filename=f"{args.molden_path}/{args.basis}_exc_{i}.molden")
+                     filename=f"{args.molden_path}/{args.basis}_exc_{i + args.excitation_start}.molden")
         print("AO Labels and coefficients:")
         print("-" * 50)
         print(f"{'AO label':<12} {'Hole':>12} {'Particle':>12}")
