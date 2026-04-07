@@ -16,14 +16,17 @@ X_\lambda \\
 Y_\lambda
 \end{pmatrix}
 $$
-
+The matrix blocks are difined as
 $$
 \begin{align}
-\Delta \epsilon_{vcv'c'} &= (\epsilon_c - \epsilon_v)\delta_{vv'}\delta_{cc'},  \\
-A_{(vc)(v'c')} &= \Delta \epsilon_{vcv'c'} +\kappa \cdot U_{vcv'c'} - W_{vv'c'c},  \\
-B_{(vc)(v'c')} &= \kappa \cdot U_{vcc'v'} - W_{vc'v'c}. 
+\begin{cases}
+\Delta \epsilon_{vcv'c'} &= (\epsilon_c - \epsilon_v)\delta_{vv'}\delta_{cc'}  \\
+A_{(vc)(v'c')} &= \Delta \epsilon_{vcv'c'} +\kappa \cdot U_{vcv'c'} - W_{vv'c'c}  \\
+B_{(vc)(v'c')} &= \kappa \cdot U_{vcc'v'} - W_{vc'v'c}
+\end{cases}
 \end{align}
 $$
+In which $\kappa$ is 0 (singlets) or 2 (triplets).
 
 Refer to our upcoming paper for more theoretical background. 
 
@@ -110,7 +113,7 @@ sh bse_singlet.sh > bse_singlet.log
 This submits a BSE calculation and the results will be saved in a `HDF5` file. 
 In the `.log` file you can also find the printed values of static and dynamic particle-hole excitations.
 By changing the `--type` argument from `singlet` to `triplet`, you can calculate the triplet excitations.
-After the BSE calculation is done and results are saved, you can run these two scripts:
+After the BSE calculation is done and results are saved, you can run these three scripts:
 
 ```bat
 sh check_MO_molden.sh 
@@ -118,10 +121,8 @@ sh plot_plas_pole.sh
 sh plot_spectrum.sh 
 ```
 
-`check_MO_molden.sh` generates the `.molden` files for each particle-hole excitation. 
+- `check_MO_molden.sh` generates the `.molden` files for each particle-hole excitation. 
 It contains the MO that hosts the electron originally and the hole MO it is excited to. 
 You can use any software that visualizes orbital information in `.molden` files to identify the excitation type.
-
-`plot_plas_pole.sh` plots the BSE-computed auxiliary response function and compare it with the plasmon-pole fitted results.
-
-`plot_spectrum.sh` plots the neutral excitation spectrum. The dynamical solutions are plotted as blue curves. The static solutions are plotted as pink poles. 
+- `plot_plas_pole.sh` plots the BSE-computed auxiliary response function and compare it with the plasmon-pole fitted results.
+- `plot_spectrum.sh` plots the neutral excitation spectrum. The dynamical solutions are plotted as blue curves. The static solutions are plotted as pink poles. 
