@@ -16,14 +16,19 @@ X_\lambda \\
 Y_\lambda
 \end{pmatrix}
 $$
+
 The matrix blocks are difined as
+
 $$
 \begin{align}
+\begin{cases}
 \Delta \epsilon_{vcv'c'} &= (\epsilon_c - \epsilon_v)\delta_{vv'}\delta_{cc'}  \\
 A_{(vc)(v'c')} &= \Delta \epsilon_{vcv'c'} +\kappa \cdot U_{vcv'c'} - W_{vv'c'c}  \\
 B_{(vc)(v'c')} &= \kappa \cdot U_{vcc'v'} - W_{vc'v'c}
+\end{cases}
 \end{align}
 $$
+
 In which $\kappa$ is 0 (singlets) or 2 (triplets).
 
 Refer to our upcoming paper for more theoretical background. 
