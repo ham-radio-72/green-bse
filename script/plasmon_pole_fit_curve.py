@@ -21,23 +21,29 @@ from plasPole import two_plasmon_model
 AU2EV = 27.211386245981  # Hartree to eV conversion factor
 
 def readBSEh5(bse_path):
-    """Read BSE data from HDF5 file."""
+    """
+    Read BSE data from HDF5 output file.
+    """
     with h5py.File(bse_path, 'r') as f:
         pole_loc = f["/PoleFit/data"][()]
         pole_str = f["/SFit/data"][()]
         G2pUpdated = f["/G2pUpdated/data"][()]
         res_norm = f["/ResNorm/data"][()]
-        pole_inf = f["/InfExcVals/data"][()].real
-    return G2pUpdated, pole_loc, pole_str, pole_inf, res_norm
+        # pole_inf = f["/InfExcVals/data"][()].real
+    return G2pUpdated, pole_loc, pole_str, res_norm
 
 
-def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx=0, beta=1000):
+def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=0, beta=1000):
+    """
+    Plot the original G2pUpdated and the plasmon-pole model fitted curve for a given excitation index.
+    """
     print("Excitation index:", exc_idx)
     ov2 = G2pUpdated.shape[1]
     print("G2pUpdated shape:", G2pUpdated.shape)
     true_exc_idx = ov2//2 + exc_idx 
     
     with h5py.File(tau_h5, 'r') as f:
+        # legacy IR grid dataset name.
         # wgrid = f["/bose/wsample"][()]
         wgrid = f["/bose/ngrid"][()]
         wgrid = 2 * wgrid * np.pi / beta
@@ -46,7 +52,6 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
     # Check dimensions and use appropriate model
     if pole_str.ndim == 2 and pole_str.shape[1] == 2:
         # Two-pole model
-        # pole_loc = pole_loc - pole_inf[:, np.newaxis]
         plasPole_fit = two_plasmon_model(Omega, G2pUpdated[0,true_exc_idx], 
                                               pole_str[true_exc_idx,0], pole_loc[true_exc_idx,0],
                                               pole_str[true_exc_idx,1], pole_loc[true_exc_idx,1])
@@ -59,7 +64,6 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
         w_str = pole_str[true_exc_idx,0]
     else:
         # Single-pole model
-        # pole_loc = pole_loc - pole_inf
         plasPole_fit = plasmon_model(Omega, G2pUpdated[0,true_exc_idx], 
                                      pole_str[true_exc_idx], pole_loc[true_exc_idx])
         print("Using single-pole model")
@@ -71,31 +75,44 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx
     F0 = G2pUpdated[len(wgrid)//2,true_exc_idx]
     w_stat = abs((1/F0).real)
     
-    plt.figure(figsize=(6,3))
-    plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real, 'x', label='Original F(iΩ)', markersize=4)
-    plt.plot(wgrid, plasPole_fit.real, '-', label='Plasmon-Pole Fit')    
+    plt.figure(figsize=(5,2))
+    plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real, 'x', label='Original $F(iΩ_n)$', markersize=4, color='#4e88c7')
+    plt.plot(wgrid, plasPole_fit.real, '-', label='Fitted $F^{mod}(iΩ)$', color='#ec8f9c')    
     # plt.plot(wgrid, -w_stat/(wgrid**2+w_stat**2), '-', label='Static Limit')    
-    plt.xlabel("iΩ")
-    plt.ylabel("F(iΩ)")
-    plt.legend()
-    plt.xlim(-10, 10)
-    # plt.ylim(-11, -9)
-    # plt.title("Comparison of Original F(iΩ) and Plasmon-Pole Fit, Excitation {}".format(exc_idx))
-    plt.annotate("Static ω = {:.4f} eV\nPole ω = {:.4f} eV\nResidual = {:.4f}".format(
-                 w_stat * AU2EV,w_pole * AU2EV, res_norm[true_exc_idx]),
-                 xy=(0.65, 0.1), xycoords='axes fraction',
-                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
+    plt.xlabel("$iΩ$ (A.U.)")
+    plt.ylabel("$F(iΩ)$")
+    plt.legend(fontsize=11, frameon=False)
+    plt.xlim(-5, 5)
+    ymax = np.ceil(max(G2pUpdated[:,true_exc_idx].real.max(), plasPole_fit.real.max()) * 2) / 2
+    ymin = np.floor(min(G2pUpdated[:,true_exc_idx].real.min(), plasPole_fit.real.min()) * 2) / 2
+    padding = (ymax - ymin) * 0.1
+    ymax += padding
+    ymin -= padding
+    plt.ylim(ymin, ymax)
+    info_text = (
+        f"$\\Omega^\\mathrm{{stat}}$ = {w_stat * AU2EV:.4f} eV\n"
+        f"$\\Omega^\\mathrm{{dyn}}$ = {w_pole * AU2EV:.4f} eV\n"
+        f"$\\Delta^\\mathrm{{res}}$ = {res_norm[true_exc_idx]:.4f}"
+    )
+    plt.text(0.63, 0.1, info_text, transform=plt.gca().transAxes,
+             fontsize=11, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
     # plt.show()
     
     
-def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx=0, beta=1000):
+def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=0, beta=1000):
+    """
+    Plot the fitting error of the plasmon-pole model for a given excitation index. 
+    The fit error is defined as the difference between the original G2pUpdated 
+    and the plasmon-pole model fitted curve.
+    """
     print("Excitation index:", exc_idx)
     ov2 = G2pUpdated.shape[1]
     print("G2pUpdated shape:", G2pUpdated.shape)
     true_exc_idx = ov2//2 + exc_idx 
     
     with h5py.File(tau_h5, 'r') as f:
+        # legacy IR grid dataset name.
         # wgrid = f["/bose/wsample"][()]
         wgrid = f["/bose/ngrid"][()]
         wgrid = 2 * wgrid * np.pi / beta
@@ -103,8 +120,6 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_nor
 
     # Check dimensions and use appropriate model
     if pole_str.ndim == 2 and pole_str.shape[1] == 2:
-        # Two-pole model
-        # pole_loc = pole_loc - pole_inf[:, np.newaxis]
         plasPole_fit = two_plasmon_model(Omega, G2pUpdated[0,true_exc_idx], 
                                          pole_str[true_exc_idx,0], pole_loc[true_exc_idx,0],
                                          pole_str[true_exc_idx,1], pole_loc[true_exc_idx,1])
@@ -117,7 +132,6 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_nor
         w_str = pole_str[true_exc_idx,0]
     else:
         # Single-pole model
-        # pole_loc = pole_loc - pole_inf
         plasPole_fit = plasmon_model(Omega, G2pUpdated[0,true_exc_idx], 
                                      pole_str[true_exc_idx], pole_loc[true_exc_idx])
         print("Using single-pole model")
@@ -129,23 +143,18 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_nor
     F0 = G2pUpdated[len(wgrid)//2,true_exc_idx]
     w_stat = abs((1/F0).real)
     
-    plt.figure(figsize=(6,3))
+    plt.figure(figsize=(5,2))
     
     plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real - plasPole_fit.real,'-',label='Fit error', markersize=4)
-    # plt.plot(wgrid, plasPole_fit.real, '-', label='Plasmon-Pole Fit')    
-    # plt.plot(wgrid, -w_stat/(wgrid**2+w_stat**2), '-', label='Static Limit')  
     plt.axhline(0, color='black', linestyle='--', linewidth=0.8)  
-    plt.xlabel("iΩ")
+    plt.xlabel("$iΩ$ (A.U.)")
     plt.ylabel("Fit Error")
-    plt.legend()
+    plt.legend(fontsize=11, frameon=False)
     plt.xlim(-10, 10)
-    # plt.ylim(-11, -9)
-    # plt.title("Comparison of Original F(iΩ) and Plasmon-Pole Fit, Excitation {}".format(exc_idx))
-    plt.annotate("Residual = {:.4f}".format(res_norm[true_exc_idx]),
+    plt.annotate("$\\Delta^\\mathrm{{res}}$ = {:.4f}".format(res_norm[true_exc_idx]),
                  xy=(0.65, 0.1), xycoords='axes fraction',
                  bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
-    # plt.show()
     
     
 def main():
@@ -176,12 +185,12 @@ def main():
     tau_h5     = args.ir_grid
     exc_idx    = args.exc_idx
 
-    G2pUpdated, pole_loc, pole_str, pole_inf, res_norm = readBSEh5(bse_path)
+    G2pUpdated, pole_loc, pole_str, res_norm = readBSEh5(bse_path)
 
-    plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx=exc_idx, beta=1000)
+    plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=exc_idx, beta=1000)
     plt.savefig(plot_file, dpi=300)
 
-    plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, pole_inf, res_norm, exc_idx=exc_idx, beta=1000)
+    plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=exc_idx, beta=1000)
     plt.savefig("fit_error_" + plot_file, dpi=300)
 
 if __name__ == "__main__":

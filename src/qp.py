@@ -50,7 +50,7 @@ def padeSigma(Sigma_tk_int, fock_eigs, beta, mu, tau_h5):
     iw_inp = iw_pos_for_pade[:, idx]
     Sigma_iw_inp = Sigma_iw_positive[idx]
     
-    print("Pade interpolation for Sigma")
+    print("Pade interpolation for Sigma.")
     sig_for_pade = np.einsum('wska -> aw', Sigma_iw_inp)
     
     coeff_a, omega_fit = AC_pade_thiele_diag(sig_for_pade, 1j * iw_inp)

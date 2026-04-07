@@ -123,24 +123,7 @@ class IR_factory(object):
 
         return X_t
 
-    # TODO Specify the version of irbasis.
     def tau_to_w_other(self, X_t, wsample):
-        """Transform from imaginary time axis to user-provided Matsubara frequency points.
-        Typically, we deal with time and Matsubara grids that are pre-determined by intermediate
-        representation grid files. This function allows transformation to other Matsubarar frequencies.
-
-        Parameters
-        ----------
-        X_t : numpy.ndarray
-            Data on imaginary time axis
-        wsample : numpy.ndarray
-            Frequency points on which Matsubara data is required
-
-        Returns
-        -------
-        numpy.ndarray
-            Data on Matsubara axis
-        """
         nw = wsample.shape[0]
         X_w = np.zeros((nw,)+X_t.shape[1:], dtype=complex)
         original_shape = X_w.shape
@@ -156,31 +139,8 @@ class IR_factory(object):
 
 
 def new_read_IR_matrices(ir_path, beta, ptype='fermi'):
-    """Read IR file with new data format
-
-    Parameters
-    ----------
-    ir_path : string
-        path to IR file
-    beta : float
-        inverse temperature
-    ptype : str, optional
-        parity type ('fermi' or 'bose'), by default 'fermi'
-
-    Returns
-    -------
-    numpy.ndarray
-        Imaginary time grid
-    numpy.ndarray
-        Matsubara grid
-    numpy.ndarray
-        Transformation coefficients
-    numpy.ndarray
-        Transformation coefficients
-    numpy.ndarray
-        Transformation coefficients
-    numpy.ndarray
-        Transformation coefficients
+    """
+    Read IR file with new data format (green-mbpt).
     """
     ir = h5py.File(ir_path, 'r')
     wsample = ir[ptype + "/ngrid"][()]
@@ -211,31 +171,8 @@ def new_read_IR_matrices(ir_path, beta, ptype='fermi'):
 
 
 def legacy_read_IR_matrices(ir_path, beta, ptype='fermi'):
-    """Read IR file with legacy data format
-
-    Parameters
-    ----------
-    ir_path : string
-        path to IR file
-    beta : float
-        inverse temperature
-    ptype : str, optional
-        parity type ('fermi' or 'bose'), by default 'fermi'
-
-    Returns
-    -------
-    numpy.ndarray
-        Imaginary time grid
-    numpy.ndarray
-        Matsubara grid
-    numpy.ndarray
-        Transformation coefficients
-    numpy.ndarray
-        Transformation coefficients
-    numpy.ndarray
-        Transformation coefficients
-    numpy.ndarray
-        Transformation coefficients
+    """
+    Read IR file with legacy data format (UGF2).
     """
     ir = h5py.File(ir_path, 'r')
     wsample = ir[ptype + "/wsample"][()]
@@ -268,6 +205,9 @@ def legacy_read_IR_matrices(ir_path, beta, ptype='fermi'):
 
 
 def tau2omegaFT(tau, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    """
+    Fourier transformation from imaginary time to frequency for Bosonic quantity.
+    """
     print("Performing Fourier transformation from img time to img freq...")
     fourier = IR_factory(beta, tau_h5)
     omega = fourier.tauf_to_wb(tau)
@@ -276,7 +216,9 @@ def tau2omegaFT(tau, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5")
 
 
 def tau2omegaFTforG(tau, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
-    # For G or any Fermionic quantity.
+    """
+    Fourier transformation from imaginary time to frequency for G or any Fermionic quantity.
+    """
     print("Performing Fourier transformation from img time to img freq...")
     fourier = IR_factory(beta, tau_h5)
     omega = fourier.tau_to_w(tau)
@@ -284,6 +226,9 @@ def tau2omegaFTforG(tau, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.
     return omega
 
 def omega2tauFT(omega, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    """
+    Fourier transformation from imaginary frequency to time for Bosonic quantity.
+    """
     print("Performing Fourier transformation from img freq to img time...")
     fourier = IR_factory(beta, tau_h5)
     tau = fourier.wb_to_tauf(omega)
@@ -291,6 +236,9 @@ def omega2tauFT(omega, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5
     return tau
 
 def omega2tauFTforG(omega, beta = 1000, tau_h5 = "/home/wenm/irgrids/" + "1e5_120.h5"):
+    """
+    Fourier transformation from imaginary frequency to time for G or any Fermionic quantity.
+    """
     print("Performing Fourier transformation from img freq to img time...")
     fourier = IR_factory(beta, tau_h5)
     tau = fourier.w_to_tau(omega)
