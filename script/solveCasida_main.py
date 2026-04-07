@@ -13,7 +13,14 @@ sys.path.append(str(this_dir / "../src"))
 
 from bse import create_argument_parser, BSESolver, BSEConfig
 
+
 def main():
+    """
+    Main function to parse arguments, create configuration, and run the BSE solver.
+    Read command-line argument definitions in create_argument_parser of src/bse.py.
+    Run the script with `python solveCasida_main.py -h` to see the available options.
+    """
+    
     parser = create_argument_parser()
     args = parser.parse_args()
     

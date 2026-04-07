@@ -6,10 +6,15 @@
 #SBATCH -t 0:30:00 
 #SBATCH -o solveCasida_output.o%j 
 
+
 export SCRIPTDIR=/your/code/directory/green-bse/script
 export INPUTDIR=/your/input/directory
 export SIMDIR=/your/input/directory
 export IRDIR=/your/irgrid/directory
+
+
+# Run `python $SCRIPTDIR/solveCasida_main.py -h` to see all available options.
+
 
 python $SCRIPTDIR/solveCasida_main.py --type singlet \
        --calc_pi 1 --qpac 1 --monitor 1 --n_jobs -1 \
