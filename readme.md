@@ -29,7 +29,7 @@ B_{(vc)(v'c')} &= \kappa \cdot U_{vcc'v'} - W_{vc'v'c}
 \end{align}
 $$
 
-In which $\kappa$ is 0 (singlets) or 2 (triplets).
+In which $\kappa$ is 2 (singlets) or 0 (triplets).
 
 Refer to our upcoming paper for more theoretical background. 
 
