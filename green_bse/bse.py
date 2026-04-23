@@ -6,10 +6,13 @@
 #    on the Matsubara frequency grid.                                         #
 #                                                                             #
 
+import platform
 import time
 import argparse
 from dataclasses import dataclass
 from typing import Optional, Tuple
+import pyscf
+import scipy
 import casidaEq as casida
 import h5py
 import contract as ct
@@ -17,6 +20,7 @@ import numpy as np
 import qp
 import plasPole
 
+# optional imports for system monitoring
 try:
     import psutil
     import multiprocessing as mp
@@ -28,10 +32,14 @@ except ImportError:
 
 AU2EV = 27.211386245981
 
-
 @dataclass
 class BSEConfig:
-    """Configuration class for BSE calculations."""
+    """
+    Configuration class for BSE calculations.
+    Default values are provided for all parameters, 
+    which can be overridden by command line arguments.
+    """
+    __version__ = "0.1.0"
     # File paths
     input_file: str = "input.h5"
     sim_file: str = "sim.h5"
@@ -59,7 +67,9 @@ class BSEConfig:
     
     @classmethod
     def from_args(cls, args):
-        """Create configuration from parsed arguments."""
+        """
+        Create configuration from parsed arguments.
+        """
         return cls(
             input_file=args.input,
             sim_file=args.sim,
@@ -77,12 +87,16 @@ class BSEConfig:
             calc_pi_on_fly=bool(args.calc_pi),
             debug_enabled=bool(args.debug),
             n_jobs=args.n_jobs,
-            monitoring_enabled=args.monitor
+            monitoring_enabled=bool(args.monitor)
         )
 
 
 class SystemMonitor:
-    """System monitoring utilities."""
+    """
+    System monitoring utilities.
+    Only enabled if psutil and joblib are available 
+    and monitoring is enabled in the config.
+    """
     
     def __init__(self, enabled: bool = True):
         self.enabled = enabled and MONITORING_AVAILABLE
@@ -99,20 +113,22 @@ class SystemMonitor:
             cpu_logical = psutil.cpu_count(logical=True)
             memory = psutil.virtual_memory()
             
-            print("=" * 70)
+            print("=" * 90)
             print("SYSTEM INFORMATION")
-            print("-" * 70)
+            print("-" * 90)
             print(f"Physical CPU cores:    {cpu_physical}")
             print(f"Logical CPU cores:     {cpu_logical}")
             print(f"Total memory:          {memory.total / (1024**3):.2f} GB")
             print(f"Available memory:      {memory.available / (1024**3):.2f} GB")
             print(f"Used memory:           {memory.used / (1024**3):.2f} GB ({memory.percent:.1f}%)")
-            print("=" * 70)
+            print("=" * 90)
         except Exception as e:
             print(f"System monitoring not available: {e}")
     
     def print_process_info(self):
-        """Print current process information."""
+        """
+        Print current process information.
+        """
         if not self.enabled:
             return
             
@@ -121,18 +137,20 @@ class SystemMonitor:
             memory_mb = process.memory_info().rss / (1024**2)
             memory_percent = process.memory_percent()
             
-            print("=" * 70)
+            print("=" * 90)
             print("PROCESS INFORMATION")
-            print("-" * 70)
+            print("-" * 90)
             print(f"Process ID:            {process.pid}")
             print(f"Memory usage:          {memory_mb:.2f} MB ({memory_percent:.1f}%)")
             print(f"Number of threads:     {process.num_threads()}")
-            print("=" * 70)
+            print("=" * 90)
         except Exception as e:
             print(f"Process monitoring not available: {e}")
     
     def print_joblib_info(self, n_jobs):
-        """Print joblib parallelization information."""
+        """
+        Print joblib parallelization information.
+        """
         if not self.enabled:
             print(f"Parallelization info: n_jobs={n_jobs}")
             return
@@ -141,41 +159,43 @@ class SystemMonitor:
             effective_jobs = effective_n_jobs(n_jobs)
             max_jobs = mp.cpu_count()
             
-            print("=" * 70)
+            print("=" * 90)
             print("PARALLELIZATION SETTINGS")
-            print("-" * 70)
+            print("-" * 90)
             print(f"Requested n_jobs:      {n_jobs}")
             print(f"Effective n_jobs:      {effective_jobs}")
             print(f"Maximum available:     {max_jobs}")
             print("n_jobs=-1 : use all available cores")
             print("n_jobs= 1 : serial execution")
-            print("=" * 70)
+            print("=" * 90)
         except Exception as e:
             print(f"Parallelization info: n_jobs={n_jobs} (monitoring unavailable): {e}")
     
     def estimate_memory_requirements(self, nao, nelec, niw):
-        """Estimate memory requirements for BSE calculations."""
+        """
+        Crude estimation of memory requirements for BSE calculations.
+        """
         occ = nelec // 2
         virt = nao - occ
         
         # Estimate major array sizes (complex128 = 16 bytes)
-        VQ_mb = (nao**4 * 16) / (1024**2)  # VQ matrix
-        Pi_mb = (niw * nao**4 * 16) / (1024**2)  # Pi matrix
+        VQ_mb = (nao**3 * 16) / (1024**2)  # VQ matrix
+        Pi_mb = (niw * nao**2 * 16) / (1024**2)  # Pi matrix
         G2p_mb = (niw * 2 * occ * virt * 16) / (1024**2)  # G2p matrices
-        working_mb = (occ**2 * virt**2 * 16 * 4) / (1024**2)  # Working arrays
-        
+        working_mb = 4 * (occ**2 * virt**2 * 16) / (1024**2)  # Working arrays
+
         total_mb = VQ_mb + Pi_mb + G2p_mb + working_mb
-        
-        print("=" * 70)
+
+        print("=" * 90)
         print("MEMORY ESTIMATES")
-        print("-" * 70)
+        print("-" * 90)
         print(f"Problem size: nao={nao}, nelec={nelec}, niw={niw}")
         print(f"VQ matrix:            {VQ_mb:.2f} MB")
         print(f"Pi matrix:            {Pi_mb:.2f} MB")
         print(f"G2p matrices:         {G2p_mb:.2f} MB")
         print(f"Working arrays:       {working_mb:.2f} MB")
         print(f"Total estimated:      {total_mb:.2f} MB ({total_mb/1024:.2f} GB)")
-        print("=" * 70)
+        print("=" * 90)
     
     def monitor_memory(self, stage: str = ""):
         """Simple memory monitoring."""
@@ -192,13 +212,16 @@ class SystemMonitor:
 
 
 class BSESolver:
-    """BSE Casida equation solver."""
+    """BSE Casida equation solver class."""
     
     def __init__(self, config: BSEConfig):
+        """
+        Initialize the calculation setup with placeholder values.
+        """
         self.config = config
         self.monitor = SystemMonitor(config.monitoring_enabled)
         
-        # System properties (filled during calculation)
+        # Initializing basic properties (filled during calculation)
         self.nao = 0
         self.nelec = 0
         self.occ = 0
@@ -209,15 +232,28 @@ class BSESolver:
         self.vexMO = None
         self.results = {}
     
+    def print_python_info(self):
+        """Print Python environment information."""
+        print("PYTHON ENVIRONMENT")
+        print(f"BSE    version:  {self.config.__version__}")
+        print(f"python version:  {platform.python_version()}")
+        print(f"numpy  version:  {np.__version__}")
+        print(f"scipy  version:  {scipy.__version__}")
+        print(f"h5py   version:  {h5py.__version__}")
+        print(f"pyscf  version:  {pyscf.__version__}")
+    
     def print_header(self):
-        """Print calculation header."""
-        print("=" * 70)
+        """Print output header."""
+        print("=" * 90)
         print("BSE CASIDA EQUATION SOLVER")
         print("FOR MATUSBARA GREEN'S FUNCTION")
-        print("Copyright (c) 2025 Ming Wen <wenm@umich.edu>, University of Michigan.")
-        print("                   Gaurav Harsha <gharsha@umich.edu>, University of Michigan.")
-
-        print("-" * 70)
+        print("Copyright (c) 2025-2026 ")
+        print("    Ming Wen <wenm@umich.edu>, University of Michigan.")
+        print("    Gaurav Harsha <gharsha@umich.edu>, University of Michigan.")
+        
+        print("-" * 90)
+        self.print_python_info()
+        print("-" * 90)
         print(f"Input file:        {self.config.input_file}")
         print(f"Integral file:     {self.config.int_path}")
         print(f"Simulation file:   {self.config.sim_file}")
@@ -225,25 +261,29 @@ class BSESolver:
         print(f"Beta (inverse T):  {self.config.beta}")
         print(f"Excitation type:   {self.config.excitation_type}")
         print(f"Monitoring:        {'Enabled' if self.config.monitoring_enabled else 'Disabled'}")
-        print("=" * 70)
+        print("=" * 90)
         
         if self.config.monitoring_enabled:
             self.monitor.print_system_info()
             self.monitor.print_process_info()
             self.monitor.print_joblib_info(self.config.n_jobs)
             
-        print("*" * 70)
+        print("*" * 90)
         print(f"    Starting Casida solver for scGW iteration: {self.config.iteration}    ")
         print(f"    iter = -1 means using the last iteration in the sim file.    ")
-        print("*" * 70)
+        print("*" * 90)
         
     def load_input_data(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Load input data from HDF5 files."""
+        """Load input data from scGW HDF5 files."""
         start = time.time()
         
         print("Reading IR file")
         with h5py.File(self.config.ir_file, "r") as f:
-            wgrid = f["/bose/wsample"][()]
+            # legacy support
+            # wgrid = f["/bose/wsample"][()]
+            # green-irgrid support
+            wgrid = f["/bose/ngrid"][()]
+            
         wgrid = 2 * wgrid * np.pi / self.config.beta
         
         print("Reading input file")
@@ -251,6 +291,10 @@ class BSESolver:
             rSk = f["/HF/S-k"][()].view(complex)
             rSk = rSk.reshape(rSk.shape[:-1])
             rFk_input = f["/HF/Fock-k"][()].view(complex)
+            rFk_input = rFk_input.reshape(rFk_input.shape[:-1])
+            # green-mbpt support
+            rHk = f["/HF/H-k"][()].view(complex)  # Core Hamiltonian.
+            rHk = rHk.reshape(rHk.shape[:-1])
             self.nao = f["/params/nao"][()]
             self.nelec = f["/params/nel_cell"][()]
         
@@ -263,19 +307,24 @@ class BSESolver:
             
             if it == 1:
                 print("Reading the HF level Fock matrix for G0W0.")
+                # green-mbpt support
                 rFk = rFk_input
+                # legacy support
+                # rFk = rFk.reshape(rFk.shape[:-1])  
             else:
-                rFk = f[f"iter{it}/Fock-k"][()].view(complex)
+                # legacy support
+                # rFk = f[f"iter{it}/Fock-k"][()].view(complex)
+                # green-mbpt support
+                rFk = f["iter" + str(it) + "/Sigma1"][()].view(complex) + rHk
                 
-            rFk = rFk.reshape(rFk.shape[:-1])
             rSigmak = f[f"iter{it}/Selfenergy/data"][()].view(complex)
-            rSigmak = rSigmak.reshape(rSigmak.shape[:-1])
+            # rSigmak = rSigmak.reshape(rSigmak.shape[:-1])
             mu = f[f"iter{it}/mu"][()]
         
         end = time.time()
-        print("*" * 70)
+        print("*" * 90)
         print(f"    Reading files: {end - start:.4f} secs    ")
-        print("*" * 70)
+        print("*" * 90)
         
         # Store for later use
         self.results['rSk'] = rSk
@@ -295,9 +344,9 @@ class BSESolver:
     def solve_molecular_orbitals(self, rFk: np.ndarray, rSk: np.ndarray):
         """Solve for molecular orbital eigenvalues and eigenvectors."""
         start = time.time()
-        print("*" * 70)
+        print("*" * 90)
         print("    Solving for MO eigenvalues    ")
-        print("*" * 70)
+        print("*" * 90)
         
         self.valsMO, self.vexMO = casida.solveMO(rFk, rSk)
         mo_coeff_gamma = np.zeros((self.config.n_spins, 1, self.nao, self.nao), dtype=np.complex128)
@@ -317,12 +366,57 @@ class BSESolver:
                 Sigma_tk_int, self.valsMO, self.config.beta, 
                 self.results['mu'], self.config.ir_file
             )
+            
+            print("\n" + "=" * 90)
+            print("QUASI-PARTICLE ENERGY LEVELS")
+            print("-" * 90)
+            print(f"{'Index':>8} {'Original (eV)':>20} {'QP Corrected (eV)':>20} {'Difference (eV)':>20}")
+            print("-" * 90)
+            
+            n_print = min(30, len(self.valsMO[0, 0, :]))
+            for i in range(n_print):
+                orig_ev = self.valsMO[0, 0, i] * AU2EV
+                qp_ev = valsMO_qp[0, 0, i] * AU2EV
+                diff_ev = (valsMO_qp[0, 0, i] - self.valsMO[0, 0, i]) * AU2EV
+                print(f"{i:8d} {orig_ev:20.6f} {qp_ev:20.6f} {diff_ev:20.6f}")
+            if n_print < len(self.valsMO[0, 0, :]):
+                print("...")
+
+            print("=" * 90 + "\n")
+            
             self.valsMO = valsMO_qp
+            
+            # Print energy gap
+            homo_qp = valsMO_qp[0, 0, self.occ - 1] * AU2EV
+            lumo_qp = valsMO_qp[0, 0, self.occ] * AU2EV
+            gap_qp = lumo_qp - homo_qp
+            
+            print("=" * 90)
+            print("QUASI-PARTICLE ENERGY GAP")
+            print("-" * 90)
+            print(f"    HOMO (QP)       :       {homo_qp:20.6f} eV")
+            print(f"    LUMO (QP)       :       {lumo_qp:20.6f} eV")
+            print(f"    Energy Gap (QP) :       {gap_qp:20.6f} eV")
+            print("=" * 90 + "\n")
+        
+        else:
+            print("QUASI-PARTICLE CORRECTION NOT ENABLED.")
+            # Print energy gap
+            homo = self.valsMO[0, 0, self.occ - 1] * AU2EV
+            lumo = self.valsMO[0, 0, self.occ] * AU2EV
+            gap = lumo - homo
+            print("\n" + "=" * 90)
+            print("ENERGY GAP")
+            print("-" * 90)
+            print(f"    HOMO       :             {homo:20.6f} eV")
+            print(f"    LUMO       :             {lumo:20.6f} eV")
+            print(f"    Energy Gap :             {gap:20.6f} eV")
+            print("=" * 90 + "\n")
         
         end = time.time()
-        print("*" * 70)
+        print("*" * 90)
         print(f"    Solve MO eigenvalues: {end - start:.4f} secs    ")
-        print("*" * 70)
+        print("*" * 90)
         
         return mo_coeff_adj, mo_coeff
     
@@ -331,6 +425,8 @@ class BSESolver:
         start = time.time()
         
         # Load VQ matrix
+        # Only implemented for q=0 case for now (single unit cell or molecules)
+        print("Reading VQ matrix from integral file.")
         VQ_ao = ct.readVQ(self.config.int_path + "VQ_0.h5")
         nQ = VQ_ao.shape[1]
         VQ = casida.VQ_ao2mo(VQ_ao, self.vexMO[0, 0, :])
@@ -367,47 +463,57 @@ class BSESolver:
         return VQ, tildeP_iw
     
     def solve_bse_equations(self, VQ: np.ndarray, tildeP_iw: np.ndarray):
-        """Solve BSE equations."""
+        """
+        Solve BSE equations after all matrices are prepared.
+        The infinity solution is also saved for book-keeping and comparison purposes.
+        G2p refer to the two-particle response function, 
+        which is referred to as an auxiliary function F in the manuscript.
+        """
         niw = tildeP_iw.shape[0]
         
         if not self.config.tda_enabled:
             # Full BSE calculation
             diffEps_ov = casida.mo2ovStat(
-                casida.diffEpsMat(self.valsMO[0, 0, :]), self.nelec
+                casida.diffEpsMat(self.valsMO[0, 0, :], self.nelec)
             ).reshape(self.occ * self.virt, self.occ * self.virt)
             
-            effVals_static, _, _, _ = casida.solveHstatic(
+            # Use static limit for initial guess
+            effVals_static, effVex_static, H_stat = casida.solveHstatic(
                 tildeP_iw[niw//2, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
-                self.config.excitation_type, tda=0
+                ex_type=self.config.excitation_type, tda=0
             )
             
-            _, effVex_static, o_idx_li, v_idx_li = casida.solveHstatic(
-                tildeP_iw[0, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
-                self.config.excitation_type, tda=0
+            H2p_dyn = casida.HDynDiagApprox(
+                tildeP_iw,effVex_static,VQ,self.valsMO,
+                self.nelec,ex_type=self.config.excitation_type,
+                n_jobs=self.config.n_jobs
             )
             
-            H2p_inf = casida.HinfDiagApprox(
-                effVex_static, VQ, self.valsMO, self.nelec, self.config.excitation_type
+            H2p_inf = H2p_dyn[0]
+            
+            effVex_occ_ao, effVex_virt_ao = casida.effVex2AO(
+                effVex_static, self.vexMO[0, 0, :], self.nelec
             )
             
-            G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
-            niw = G2p_iw_init_inv.shape[0]
+            # Sort eigenvalues and eigenvectors by eigenvalues
+            idx = np.argsort(effVals_static)
+            effVals_static = effVals_static[idx]
+            H2p_inf = H2p_inf[idx]
+            H2p_dyn = H2p_dyn[:, idx]
+            effVex_static  = effVex_static[:, idx]
+            effVex_occ_ao  = effVex_occ_ao[:, idx] 
+            effVex_virt_ao = effVex_virt_ao[:, idx]
+            niw = H2p_dyn.shape[0]
             
-            G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
-            for iw in range(niw):
-                G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
+            # Initiaize the two-particle response function from H2p_inf for referential purposes.
+            # Not saved in putput file but can be useful for debugging and comparison.
+            # G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
+            # G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
+            # for iw in range(niw):
+            #     G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
             
-            if self.config.monitoring_enabled:
-                self.monitor.monitor_memory("Before updateG2p_alt")
-                print(f" Starting updateG2p_alt with n_jobs={self.config.n_jobs}")
-            
-            G2p_iw_updated = casida.updateG2p_alt(
-                G2p_iw_init_inv, tildeP_iw, effVex_static, VQ, self.nelec, self.config.n_jobs
-            )
-                
-            if self.config.monitoring_enabled:
-                self.monitor.monitor_memory("After updateG2p_alt")
-                
+            G2p_iw_updated = casida.G2p(H2p_dyn, self.config.ir_file, self.config.beta)
+
             G2p_tau_updated = ct.omega2tauFT(G2p_iw_updated, self.config.beta, self.config.ir_file)
             
             wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update(
@@ -415,16 +521,18 @@ class BSESolver:
             )
             
             self.results.update({
-                'G2p_iw_init': G2p_iw_init,
+                # 'G2p_iw_init': G2p_iw_init,
                 'G2p_iw_updated': G2p_iw_updated,
                 'G2p_tau_updated': G2p_tau_updated,
                 'H2p_inf': H2p_inf,
+                'H_stat': H_stat,
                 'effVals_static': effVals_static,
+                'effVex_static': effVex_static,
                 'pole_fit': wpole_data,
                 'S_fit': S_data,
                 'residual_norm_fit': res_norm_data,
-                'occ_index': o_idx_li,
-                'virt_index': v_idx_li
+                'occ_AO_indices': effVex_occ_ao,
+                'virt_AO_indices': effVex_virt_ao
             })
             
         else:
@@ -435,70 +543,75 @@ class BSESolver:
         """Save calculation results to HDF5 file."""
         start = time.time()
         with h5py.File(self.config.output_file, 'w') as f:
-            f["/G2pInit/data"] = self.results['G2p_iw_init']
             f["/G2pUpdated/data"] = self.results['G2p_iw_updated']
             f["/G2pUpdated_tau/data"] = self.results['G2p_tau_updated']
             f["/InfExcVals/data"] = self.results['H2p_inf']
             f["/StatExcVals/data"] = self.results['effVals_static']
+            f["/StatExcVex/data"] = self.results['effVex_static']
             f["/PoleFit/data"] = self.results['pole_fit']
             f["/SFit/data"] = self.results['S_fit']
             f["/ResNorm/data"] = self.results['residual_norm_fit']
             f["/MOvectors/data"] = self.vexMO
             f["/MOvals/data"] = self.valsMO
-            f["/Indices/occ"] = self.results['occ_index']
-            f["/Indices/virt"] = self.results['virt_index']
+            f["/AOindices/occ"] = self.results['occ_AO_indices']
+            f["/AOindices/virt"] = self.results['virt_AO_indices']
         
         end = time.time()
-        print("*" * 70)
+        print("*" * 90)
         print(f"    Write output: {end - start:.4f} secs    ")
-        print("*" * 70)
+        print("*" * 90)
     
     def print_results(self):
         """Print calculation results."""
-        print("=" * 90)
-        print("EXCITATION EIGENVALUES (eV)")
-        print("Only printing the first 20 positive eigenvalues from each calculation.")
-        print("-" * 90)
+        print("=" * 100)
+        print("NEUTRAL EXCITATIONS")
+        print("Only printing the first 20 positive eigenvalues.")
+        print("-" * 100) 
         
         # Get eigenvalues
-        static_pos = self.results['effVals_static'][self.results['effVals_static'] > 0].real
+        idx_li = self.results['effVals_static'] > 0
+        static_pos = self.results['effVals_static'][idx_li].real
         static_ev = static_pos * AU2EV
-        inf_pos = self.results['H2p_inf'][self.results['H2p_inf'] > 0].real
+        inf_pos = self.results['H2p_inf'][idx_li].real
         inf_ev = inf_pos * AU2EV
-        dyn_pos = self.results['pole_fit'][self.results['S_fit'] > 0].real
+        pole_data = self.results['pole_fit']
+        s_data = self.results['S_fit']
+        
+        # Check dimensions and extract first peak if needed
+        if pole_data.ndim > 1:
+            dyn_pos = pole_data[:, 0][idx_li].real
+            res = self.results['residual_norm_fit'][:][idx_li].real
+        else:
+            dyn_pos = pole_data[idx_li].real
+            res = self.results['residual_norm_fit'][idx_li].real
+
         dyn_ev = dyn_pos * AU2EV
+        # res = res
         
-        occ_indices = self.results['occ_index'][self.results['H2p_inf'] > 0]
-        virt_indices = self.results['virt_index'][self.results['H2p_inf'] > 0]
-        
-        # Determine how many to display (first 20)
+        # Determine how many to display (first 20 by default)
         n_static = min(20, len(static_ev))
         n_inf = min(20, len(inf_ev))
         n_dyn = min(20, len(dyn_ev))
-        n_occ_indices = min(20, len(occ_indices))
-        n_virt_indices = min(20, len(virt_indices))
-        n_display = max(n_static, n_inf, n_dyn, n_occ_indices, n_virt_indices)
+        n_display = max(n_static, n_inf, n_dyn)
         
         if n_display > 0:
-            print(f"{'Index':>5} {'Static (eV)':>15} {'Infinite (eV)':>15} {'Dynamic (eV)':>15} {'Occupied MO':>15} {'Virtual MO':>15}")
+            print(f"{'Index':>5} {'Static (eV)':>15} {'Infinite (eV)':>15} {'Dynamic (eV)':>15} {'Residual':>15}")
             print("-" * 90)
             
             for i in range(n_display):
                 static_val = static_ev[i] if i < len(static_ev) else None
                 inf_val = inf_ev[i] if i < len(inf_ev) else None
                 dyn_val = dyn_ev[i] if i < len(dyn_ev) else None
-                occ_idx = occ_indices[i] if i < len(occ_indices) else None
-                virt_idx = virt_indices[i] if i < len(virt_indices) else None
                 
-                static_str = f"{static_val:10.4f}" if static_val is not None else "    N/A    "
-                inf_str = f"{inf_val:10.4f}" if inf_val is not None else "    N/A    "
-                dyn_str = f"{dyn_val:10.4f}" if dyn_val is not None else "    N/A    "
-                occ_str = f"{occ_idx:5d}" if occ_idx is not None else " N/A "
-                virt_str = f"{virt_idx:5d}" if virt_idx is not None else " N/A "
+                static_str = f"{static_val:10.4f}" if static_val is not None else "N/A"
+                inf_str = f"{inf_val:10.4f}" if inf_val is not None else "N/A"
+                dyn_str = f"{dyn_val:10.4f}" if dyn_val is not None else "N/A"
+                res_str = f"{res[i]:10.4f}" if i < len(res) else "N/A"
 
-                print(f"{i+1:5d} {static_str:>15} {inf_str:>15} {dyn_str:>15} {occ_str:>15} {virt_str:>15}")
+                print(f"{i:5d} {static_str:>15} {inf_str:>15} {dyn_str:>15} {res_str:>15}")
                 
             print("......")
+            print("All results are saved in the output HDF5 file.")
         else:
             print("No positive eigenvalues found in either calculation")
 
@@ -520,10 +633,11 @@ class BSESolver:
         # Solve BSE equations
         start_bse = time.time()
         self.solve_bse_equations(VQ, tildeP_iw)
+        # self.solve_bse_equations_full(VQ, tildeP_iw)
         end_bse = time.time()
-        print("*" * 70)
+        print("*" * 90)
         print(f"    BSE Casida equation: {end_bse - start_bse:.4f} secs    ")
-        print("*" * 70)
+        print("*" * 90)
         
         # Print results
         self.print_results()
@@ -533,67 +647,88 @@ class BSESolver:
         
         # Final monitoring summary
         if self.config.monitoring_enabled:
-            print("\n" + "=" * 70)
+            print("\n" + "=" * 90)
             print("FINAL SYSTEM STATUS")
-            print("-" * 70)
+            print("-" * 90)
             self.monitor.monitor_memory("Final memory usage")
             try:
                 if MONITORING_AVAILABLE:
                     process = psutil.Process()
-                    # peak_memory = process.memory_info().rss / (1024**2)
-                    # print(f"Peak memory usage:     {peak_memory:.2f} MB")
                     print(f"Final thread count:    {process.num_threads()}")
-                print("=" * 70)
+                print("=" * 90)
             except Exception:
                 print("Final monitoring unavailable")
-                print("=" * 70)
+                print("=" * 90)
 
 def create_argument_parser():
-    """Create command line argument parser."""
+    """
+    Create command line argument parser.
+    This function defines all the command line arguments 
+    that can be used to configure the BSE calculation.
+    Default values are set to do singlet calculation without TDA.
+    """
     parser = argparse.ArgumentParser(
-        description="BSE Casida equation solver with object-oriented design"
+        description="BSE Casida equation solver with object-oriented design."
     )
     
     # File paths
     parser.add_argument("--input", type=str, default="input.h5",
-                        help="Input of scGW")
+                        help="HDF5 file path for input of scGW.")
     parser.add_argument("--sim", type=str, default="sim.h5",
-                        help="Output of scGW")
+                        help="HDF5 file path for output of scGW.")
     parser.add_argument("--output", type=str, default="bse.h5",
-                        help="Output of BSE")
+                        help="HDF5 file path for output of BSE.")
     parser.add_argument("--int_path", type=str, default="df_hf_int/",
-                        help="Path for the VQ.h5 file")
+                        help="Path for the VQ.h5 file that contains information about \
+                            the electronic repulsion integrals. \
+                            Note that it is the path to the folder \
+                            that contains VQ_0.h5, not the file itself.")
     parser.add_argument("--ir_file", type=str, default=None,
-                        help="HDF5 file that contains information about the IR grid.")
+                        help="HDF5 file path that contains information about the IR grid.")
     parser.add_argument("--pi_file", type=str, default="p_iw_tilde_q0.h5",
-                        help="HDF5 file that contains information about non-interacting susceptibility.")
+                        help="HDF5 file path that contains information about \
+                            non-interacting susceptibility.")
     
-    # Physical parameters
+    # Parameters
     parser.add_argument("--beta", type=float, default=1000, 
-                        help="Inverse temperature")
+                        help="Inverse temperature. Default is 1000, which corresponds to \
+                            a temperature of about 300K.")
     parser.add_argument("--iter", type=int, default=-1,
-                        help="Iteration number of the scGW cycle to use for continuation")
+                        help="Iteration number of the scGW cycle to use for BSE. \
+                            Default -1 means using the latest iteration.")
     parser.add_argument("--iter_W", type=int, default=-1,
-                        help="Iteration number of W you want to use. Default -1 means using the latest W.")
-    
-    # Calculation settings
-    parser.add_argument("--type", type=str, default="normal",
-                        help="Type of excitations.")
+                        help="Iteration number of screened Coulomb W to use. \
+                            Default -1 means using the latest W. \
+                            If iter_W = 1, then W will be calculated \
+                            from the mean-field (HF/DFT) reference.")
     parser.add_argument("--ns", type=int, default=1,
-                        help="Number of spins")
-    parser.add_argument("--qpac", type=int, default=0,
-                        help="Enable QP AC?")
+                        help="Number of spins. It must be 1 for Casida formulation \
+                            i.e. restricted calculation.")
+    parser.add_argument("--type", type=str, default="singlet",
+                        help="Type of excitations (singlet or triplet) to be calculated. \
+                            Default is singlet.")
+
+    # Calculation switches
+    parser.add_argument("--qpac", type=int, default=1,
+                        help="Enable Quasi-Particle (QP) Approximation? \
+                            Default is 1, which means using the QP-corrected \
+                            energy levels as input for BSE calculation.")
     parser.add_argument("--tda", type=int, default=0,
-                        help="Enable TD approximation")
-    parser.add_argument("--calc_pi", type=bool, default=False,
-                        help="Option to calculate Pi on the fly. Not implemented yet.")
-    parser.add_argument("--debug", type=int, default=0,
-                        help="Enable debugging")
-    
-    # Performance
+                        help="Enable Tamm-Dancoff approximation? \
+                            Default is 0, which means solving the full BSE equations.")
+    parser.add_argument("--calc_pi", type=int, default=1,
+                        help="Calculate Pi on the fly. If False, must provide a pi_file to read from. \
+                            Default is 1, which means calculating Pi from the scGW output file.")
+
+    # Performance switches
     parser.add_argument("--n_jobs", type=int, default=-1,
-                        help="Number of parallel jobs for frequency loops (-1 = all cores, 1 = serial)")
-    parser.add_argument("--monitor", action="store_true",
-                        help="Enable system monitoring and memory tracking")
+                        help="Number of parallel jobs for frequency loops (-1 = all cores, 1 = serial) \
+                            Default is -1, which means using all available cores in the node.")
+    parser.add_argument("--monitor", type=int, default=1,
+                        help="Enable system monitoring and memory tracking? \
+                            Default is 1, which means enabling system monitoring and memory tracking.")
+    parser.add_argument("--debug", type=int, default=0,
+                        help="Enable debugging mode? \
+                            Default is 0, which means disabling debugging mode.")
     
     return parser
