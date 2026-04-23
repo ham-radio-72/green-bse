@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 this_dir = Path(__file__).resolve().parent
-sys.path.append(str(this_dir / "../src"))
+sys.path.append(str(this_dir / "../green_bse"))
 
 from bse import create_argument_parser, BSESolver, BSEConfig
 

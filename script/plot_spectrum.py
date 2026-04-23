@@ -48,7 +48,7 @@ def plot_spectral_function(pole_loc, pole_str, eta, wmin=0, wmax=20, npts=1000):
         elif pole_str[i] < 0:
             plt.axvline(-pole_loc[i], color='#ec8f9c', linestyle='-', alpha=0.5, ymin=0, ymax=y_max/plt.ylim()[1])
     
-    plt.xlabel(r"$\omega$ (eV)")
+    plt.xlabel(r"$\Omega$ (eV)")
     plt.ylabel(r"$\rho_{A}$ (arb. unit)")
     plt.xlim(wmin, wmax)
     plt.ylim(plt.ylim()[1] * -0.01, plt.ylim()[1])

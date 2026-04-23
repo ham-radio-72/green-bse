@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 this_dir = Path(__file__).resolve().parent
-sys.path.append(str(this_dir / "../src"))
+sys.path.append(str(this_dir / "../green_bse"))
 
 import h5py
 import numpy as np
@@ -77,10 +77,10 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=0, beta=1
     
     plt.figure(figsize=(5,2))
     plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real, 'x', label='Original $F(iΩ_n)$', markersize=4, color='#4e88c7')
-    plt.plot(wgrid, plasPole_fit.real, '-', label='Fitted $F^{mod}(iΩ)$', color='#ec8f9c')    
+    plt.plot(wgrid, plasPole_fit.real, '-', label='Fitted $F^{\mathrm{mod}}(iΩ_n)$', color='#ec8f9c')    
     # plt.plot(wgrid, -w_stat/(wgrid**2+w_stat**2), '-', label='Static Limit')    
-    plt.xlabel("$iΩ$ (A.U.)")
-    plt.ylabel("$F(iΩ)$")
+    plt.xlabel("$iΩ_n$ (a.u.)")
+    plt.ylabel("$F(iΩ_n)$")
     plt.legend(fontsize=11, frameon=False)
     plt.xlim(-5, 5)
     ymax = np.ceil(max(G2pUpdated[:,true_exc_idx].real.max(), plasPole_fit.real.max()) * 2) / 2
