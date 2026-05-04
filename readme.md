@@ -128,4 +128,4 @@ sh plot_spectrum.sh
 It contains the MO that hosts the electron originally and the hole MO it is excited to. 
 You can use any software that visualizes orbital information in `.molden` files to identify the excitation type.
 - `plot_plas_pole.sh` plots the BSE-computed auxiliary response function and compare it with the plasmon-pole fitted results.
-- `plot_spectrum.sh` plots the neutral excitation spectrum. The dynamical solutions are plotted as blue curves. The static solutions are plotted as pink poles. 
+- `plot_spectrum.sh` plots the neutral excitation spectrum. The dynamical solutions are plotted as blue curves. The static solutions are plotted as pink curves with constant pole strenths. 

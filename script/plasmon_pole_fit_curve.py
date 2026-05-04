@@ -75,14 +75,16 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=0, beta=1
     F0 = G2pUpdated[len(wgrid)//2,true_exc_idx]
     w_stat = abs((1/F0).real)
     
-    plt.figure(figsize=(5,2))
+    # plt.figure(figsize=(5,2))
+    plt.figure(figsize=(3.5,1.75))
     plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real, 'x', label='Original $F(iΩ_n)$', markersize=4, color='#4e88c7')
     plt.plot(wgrid, plasPole_fit.real, '-', label='Fitted $F^{\mathrm{mod}}(iΩ_n)$', color='#ec8f9c')    
     # plt.plot(wgrid, -w_stat/(wgrid**2+w_stat**2), '-', label='Static Limit')    
     plt.xlabel("$iΩ_n$ (a.u.)")
     plt.ylabel("$F(iΩ_n)$")
-    plt.legend(fontsize=11, frameon=False)
-    plt.xlim(-5, 5)
+    # plt.legend(fontsize=11, frameon=False)
+    plt.legend(fontsize=7, frameon=False, loc='lower left')
+    plt.xlim(-4, 4)
     ymax = np.ceil(max(G2pUpdated[:,true_exc_idx].real.max(), plasPole_fit.real.max()) * 2) / 2
     ymin = np.floor(min(G2pUpdated[:,true_exc_idx].real.min(), plasPole_fit.real.min()) * 2) / 2
     padding = (ymax - ymin) * 0.1
@@ -94,8 +96,8 @@ def plot_G2p(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx=0, beta=1
         f"$\\Omega^\\mathrm{{dyn}}$ = {w_pole * AU2EV:.4f} eV\n"
         f"$\\Delta^\\mathrm{{res}}$ = {res_norm[true_exc_idx]:.4f}"
     )
-    plt.text(0.63, 0.1, info_text, transform=plt.gca().transAxes,
-             fontsize=11, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
+    plt.text(0.60, 0.1, info_text, transform=plt.gca().transAxes,
+             fontsize=8, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", lw=1))
     plt.tight_layout()
     # plt.show()
     
@@ -143,7 +145,7 @@ def plot_G2p_fit_error(G2pUpdated, tau_h5, pole_loc, pole_str, res_norm, exc_idx
     F0 = G2pUpdated[len(wgrid)//2,true_exc_idx]
     w_stat = abs((1/F0).real)
     
-    plt.figure(figsize=(5,2))
+    plt.figure(figsize=(4,2))
     
     plt.plot(wgrid, G2pUpdated[:,true_exc_idx].real - plasPole_fit.real,'-',label='Fit error', markersize=4)
     plt.axhline(0, color='black', linestyle='--', linewidth=0.8)  
