@@ -125,15 +125,15 @@ def eval_G_init_tau(beta=1000, input_h5="input.h5", tau_h5="1e5_120.h5", debug=F
     Ne = h5py.File(input_h5, "r")["/params/nel_cell"][()]
     mo_energy = h5py.File(input_h5, "r")["/HF/mo_energy"][()]
     C = h5py.File(input_h5, "r")["/HF/mo_coeff"][()]
-    # F = h5py.File(input_h5, "r")["/HF/Fock-k"][()].view(np.complex128)[0, 0, :, :, 0]
-    # S = h5py.File(input_h5, "r")["/HF/S-k"][()].view(np.complex128)[0, 0, :, :, 0]
-        
+
     wgrid = (2 * wgrid + 1) * np.pi / beta
     mu = find_mu_bisection(mo_energy, Ne, beta, degeneracy=2)
     niw = wgrid.shape[0]
     print(f"The chemical potential mu (Hartree) = {mu}")
     
     if debug:
+        F = h5py.File(input_h5, "r")["/HF/Fock-k"][()].view(np.complex128)[0, 0, :, :, 0]
+        S = h5py.File(input_h5, "r")["/HF/S-k"][()].view(np.complex128)[0, 0, :, :, 0]
         print(S.shape)
         print(f"Max deviation of CC† from S⁻¹: {np.max(np.abs(C @ C.conj().T - np.linalg.inv(S)))}")     # how far CC† is from S⁻¹ 
         M = C.conj().T @ F @ C
