@@ -52,6 +52,7 @@ class BSEConfig:
     beta: float = 1000.0
     iteration: int = -1
     iter_W: int = -1
+    static_coupling: bool = False
     
     # Calculation settings
     excitation_type: str = "normal"
@@ -80,6 +81,7 @@ class BSEConfig:
             beta=args.beta,
             iteration=args.iter,
             iter_W=args.iter_W,
+            static_coupling=bool(args.static_coupling),
             excitation_type=args.type,
             n_spins=args.ns,
             qpac_enabled=bool(args.qpac),
@@ -270,7 +272,8 @@ class BSESolver:
             
         print("*" * 90)
         print(f"    Starting Casida solver for scGW iteration: {self.config.iteration}    ")
-        print(f"    iter = -1 means using the last iteration in the sim file.    ")
+        print(f"    iter = 1 means using the first iteration in the sim file, i.e. G0W0    ")
+        print(f"    iter = -1 means using the last iteration in the sim file, i.e. scGW.    ")
         print("*" * 90)
         
     def load_input_data(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -305,7 +308,7 @@ class BSESolver:
         with h5py.File(self.config.sim_file, 'r') as f:
             it = f["iter"][()] if self.config.iteration == -1 else self.config.iteration
             
-            if it == 1:
+            if it == 0:
                 print("Reading the HF level Fock matrix for G0W0.")
                 # green-mbpt support
                 rFk = rFk_input
@@ -316,7 +319,7 @@ class BSESolver:
                 # rFk = f[f"iter{it}/Fock-k"][()].view(complex)
                 # green-mbpt support
                 rFk = f["iter" + str(it) + "/Sigma1"][()].view(complex) + rHk
-                
+            
             rSigmak = f[f"iter{it}/Selfenergy/data"][()].view(complex)
             # rSigmak = rSigmak.reshape(rSigmak.shape[:-1])
             mu = f[f"iter{it}/mu"][()]
@@ -433,20 +436,29 @@ class BSESolver:
         
         # Handle Pi matrix (either calculate or read from file)
         if self.config.calc_pi_on_fly:
-            print(f"Calculating Pi on the fly from iteration {self.config.iter_W} of sim file.")
-            tildeP_tau = ct.getPtilde(
-                self.config.iter_W, self.nao, nQ,
-                tau_h5=self.config.ir_file,
-                int_path=self.config.int_path,
-                sim_h5=self.config.sim_file
-            )
+            if self.config.iter_W == 0:
+                print("iter_W = 0: Calculating Pi on the fly from the initial G (mean-field).")
+                tildeP_tau = ct.getPtilde_init(nQ, beta=self.config.beta,
+                    tau_h5=self.config.ir_file,
+                    int_path=self.config.int_path,
+                    input_h5=self.config.input_file
+                )
+
+            elif self.config.iter_W != 0:
+                print(f"iter_W = {self.config.iter_W}: Calculating Pi on the fly from iteration {self.config.iter_W} of sim file.")
+                tildeP_tau = ct.getPtilde(
+                    self.config.iter_W, nQ,
+                    tau_h5=self.config.ir_file,
+                    int_path=self.config.int_path,
+                    sim_h5=self.config.sim_file
+                )
             tildeP_iw = ct.tau2omegaFT(tildeP_tau, beta=self.config.beta, tau_h5=self.config.ir_file)
             niw = tildeP_iw.shape[0]
             tildeP_iw = tildeP_iw.reshape(niw, 1, nQ, nQ, 1)
             del tildeP_tau
-            
+
             if self.config.monitoring_enabled:
-                self.monitor.monitor_memory("After Pi calculation")
+                    self.monitor.monitor_memory("After Pi calculation")
         else:
             tildeP_iw = ct.readPtilde(self.config.pi_file)
             print("! Because you chose to read from Pi file, the iteration of W you specified might not be used. !")
@@ -471,73 +483,75 @@ class BSESolver:
         """
         niw = tildeP_iw.shape[0]
         
-        if not self.config.tda_enabled:
-            # Full BSE calculation
-            diffEps_ov = casida.mo2ovStat(
-                casida.diffEpsMat(self.valsMO[0, 0, :], self.nelec)
-            ).reshape(self.occ * self.virt, self.occ * self.virt)
-            
-            # Use static limit for initial guess
-            effVals_static, effVex_static, H_stat = casida.solveHstatic(
-                tildeP_iw[niw//2, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
-                ex_type=self.config.excitation_type, tda=0
-            )
-            
-            H2p_dyn = casida.HDynDiagApprox(
-                tildeP_iw,effVex_static,VQ,self.valsMO,
-                self.nelec,ex_type=self.config.excitation_type,
-                n_jobs=self.config.n_jobs
-            )
-            
-            H2p_inf = H2p_dyn[0]
-            
-            effVex_occ_ao, effVex_virt_ao = casida.effVex2AO(
-                effVex_static, self.vexMO[0, 0, :], self.nelec
-            )
-            
-            # Sort eigenvalues and eigenvectors by eigenvalues
-            idx = np.argsort(effVals_static)
-            effVals_static = effVals_static[idx]
-            H2p_inf = H2p_inf[idx]
-            H2p_dyn = H2p_dyn[:, idx]
-            effVex_static  = effVex_static[:, idx]
-            effVex_occ_ao  = effVex_occ_ao[:, idx] 
-            effVex_virt_ao = effVex_virt_ao[:, idx]
-            niw = H2p_dyn.shape[0]
-            
-            # Initiaize the two-particle response function from H2p_inf for referential purposes.
-            # Not saved in putput file but can be useful for debugging and comparison.
-            # G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
-            # G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
-            # for iw in range(niw):
-            #     G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
-            
-            G2p_iw_updated = casida.G2p(H2p_dyn, self.config.ir_file, self.config.beta)
+        # if not self.config.tda_enabled:
+        
+        # Full BSE calculation
+        diffEps_ov = casida.mo2ovStat(
+            casida.diffEpsMat(self.valsMO[0, 0, :], self.nelec)
+        ).reshape(self.occ * self.virt, self.occ * self.virt)
+        
+        # Use static limit for initial guess
+        effVals_static, effVex_static, H_stat = casida.solveHstatic(
+            tildeP_iw[niw//2, 0, :, :, 0], VQ, diffEps_ov, self.nelec, 
+            ex_type=self.config.excitation_type, tda=self.config.tda_enabled
+        )
+        
+        H2p_dyn = casida.HDynDiagApprox(
+            tildeP_iw,effVex_static,VQ,self.valsMO,
+            self.nelec,ex_type=self.config.excitation_type,
+            n_jobs=self.config.n_jobs,static_coupling=self.config.static_coupling,
+            tda=self.config.tda_enabled
+        )
+        
+        H2p_inf = H2p_dyn[0]
+        
+        effVex_occ_ao, effVex_virt_ao = casida.effVex2AO(
+            effVex_static, self.vexMO[0, 0, :], self.nelec
+        )
+        
+        # Sort eigenvalues and eigenvectors by eigenvalues
+        idx = np.argsort(effVals_static)
+        effVals_static = effVals_static[idx]
+        H2p_inf = H2p_inf[idx]
+        H2p_dyn = H2p_dyn[:, idx]
+        effVex_static  = effVex_static[:, idx]
+        effVex_occ_ao  = effVex_occ_ao[:, idx] 
+        effVex_virt_ao = effVex_virt_ao[:, idx]
+        niw = H2p_dyn.shape[0]
+        
+        # Initiaize the two-particle response function from H2p_inf for referential purposes.
+        # Not saved in putput file but can be useful for debugging and comparison.
+        # G2p_iw_init_inv = casida.initG2p_inv(H2p_inf, self.config.ir_file, self.config.beta)
+        # G2p_iw_init = np.zeros(G2p_iw_init_inv.shape, dtype=np.complex128)
+        # for iw in range(niw):
+        #     G2p_iw_init[iw, :] = 1 / G2p_iw_init_inv[iw, :]
+        
+        G2p_iw_updated = casida.G2p(H2p_dyn, self.config.ir_file, self.config.beta)
 
-            G2p_tau_updated = ct.omega2tauFT(G2p_iw_updated, self.config.beta, self.config.ir_file)
-            
-            wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update(
-                G2p_iw_updated, self.config.ir_file, beta=self.config.beta
-            )
-            
-            self.results.update({
-                # 'G2p_iw_init': G2p_iw_init,
-                'G2p_iw_updated': G2p_iw_updated,
-                'G2p_tau_updated': G2p_tau_updated,
-                'H2p_inf': H2p_inf,
-                'H_stat': H_stat,
-                'effVals_static': effVals_static,
-                'effVex_static': effVex_static,
-                'pole_fit': wpole_data,
-                'S_fit': S_data,
-                'residual_norm_fit': res_norm_data,
-                'occ_AO_indices': effVex_occ_ao,
-                'virt_AO_indices': effVex_virt_ao
-            })
-            
-        else:
-            print("TDA approximation is not fully implemented yet. Exiting.")
-            raise NotImplementedError("TDA approximation not implemented")
+        G2p_tau_updated = ct.omega2tauFT(G2p_iw_updated, self.config.beta, self.config.ir_file)
+        
+        wpole_data, S_data, _, res_norm_data = plasPole.fit_G_update(
+            G2p_iw_updated, self.config.ir_file, beta=self.config.beta
+        )
+        
+        self.results.update({
+            # 'G2p_iw_init': G2p_iw_init,
+            'G2p_iw_updated': G2p_iw_updated,
+            'G2p_tau_updated': G2p_tau_updated,
+            'H2p_inf': H2p_inf,
+            'H_stat': H_stat,
+            'effVals_static': effVals_static,
+            'effVex_static': effVex_static,
+            'pole_fit': wpole_data,
+            'S_fit': S_data,
+            'residual_norm_fit': res_norm_data,
+            'occ_AO_indices': effVex_occ_ao,
+            'virt_AO_indices': effVex_virt_ao
+        })
+        
+        # else:
+        #     print("TDA approximation is not fully implemented yet. Exiting.")
+        #     raise NotImplementedError("TDA approximation not implemented")
     
     def save_results(self):
         """Save calculation results to HDF5 file."""
@@ -699,8 +713,11 @@ def create_argument_parser():
     parser.add_argument("--iter_W", type=int, default=-1,
                         help="Iteration number of screened Coulomb W to use. \
                             Default -1 means using the latest W. \
-                            If iter_W = 1, then W will be calculated \
+                            If iter_W = 0, then W will be calculated \
                             from the mean-field (HF/DFT) reference.")
+    parser.add_argument("--static_coupling", type=int, default=0,
+                        help="Enable static coupling so that B blocks are treated as static? \
+                            Default is 0, which means using all dynamic blocks.")
     parser.add_argument("--ns", type=int, default=1,
                         help="Number of spins. It must be 1 for Casida formulation \
                             i.e. restricted calculation.")
