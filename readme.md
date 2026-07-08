@@ -93,7 +93,7 @@ Redirect to `script` and run `python solveCasida_main.py -h` to see the definiti
 - `calc_pi`: Calculate polarizability on the fly (default: `True`)
 - `qpac`: Use QP for *GW* energy levels (default: `True`)
 - `monitor`: Memory and parallelization monitoring (default: `True`)
-- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the lastest iteration). `iter` is for QP energy and `iter_W` is for screened Coulomb iteraction. Use default options to calculate BSE@sc*GW* excitations.
+- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the latest iteration). `iter` is for QP energy and `iter_W` is for screened Coulomb interaction. Use default options to calculate BSE@sc*GW* excitations.
 - In order to calculate BSE@*G*$_0$*W*$_0$ excitations, please use `iter=1` and `iter_W=0`. `iter=1` means to calculate QP energy from the self-energy of the first finished *GW* iteration. `iter_W=0` means to re-calculate *W*$_0$ from scratch because *W* is not stored in `sim.h5`. 
 - `n_jobs`: Number of threads to be used. (default: `-1` to use all threads available)
 - `output`: Output file containing excitation energies, eigenvectors, and fitted poles.
