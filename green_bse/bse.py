@@ -458,7 +458,7 @@ class BSESolver:
             del tildeP_tau
 
             if self.config.monitoring_enabled:
-                    self.monitor.monitor_memory("After Pi calculation")
+                self.monitor.monitor_memory("After Pi calculation")
         else:
             tildeP_iw = ct.readPtilde(self.config.pi_file)
             print("! Because you chose to read from Pi file, the iteration of W you specified might not be used. !")
