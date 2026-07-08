@@ -113,7 +113,7 @@ def readGtau(sim_h5, iter=-1):
     return G_data
 
 
-def eval_G_init_tau(beta=1000, input_h5="input.h5", tau_h5="1e5_120.h5"):
+def eval_G_init_tau(beta=1000, input_h5="input.h5", tau_h5="1e5_120.h5", debug=False):
     """
     Calculate G_tau data from the initial mean-field calculation.
     """
@@ -125,19 +125,36 @@ def eval_G_init_tau(beta=1000, input_h5="input.h5", tau_h5="1e5_120.h5"):
     mo_energy = h5py.File(input_h5, "r")["/HF/mo_energy"][()]
     C = h5py.File(input_h5, "r")["/HF/mo_coeff"][()]
 
-    wgrid = (2 * np.pi + 1 / beta) * wgrid 
+    wgrid = (2 * wgrid + 1) * np.pi / beta
     mu = find_mu_bisection(mo_energy, Ne, beta, degeneracy=2)
     niw = wgrid.shape[0]
     print(f"The chemical potential mu (Hartree) = {mu}")
     
+    if debug:
+        F = h5py.File(input_h5, "r")["/HF/Fock-k"][()].view(np.complex128)[0, 0, :, :, 0]
+        S = h5py.File(input_h5, "r")["/HF/S-k"][()].view(np.complex128)[0, 0, :, :, 0]
+        print(S.shape)
+        print(f"Max deviation of CC† from S⁻¹: {np.max(np.abs(C @ C.conj().T - np.linalg.inv(S)))}")     # how far CC† is from S⁻¹ 
+        M = C.conj().T @ F @ C
+        print("offdiag of C†FC :", np.max(np.abs(M - np.diag(np.diag(M)))))
+        print("diag vs mo_energy:", np.max(np.abs(np.diag(M).real - mo_energy)))
+
+        # and the two G(iω) at the HIGHEST frequency (tail = most boundary-sensitive)
+        n = len(wgrid)-1; w = wgrid[n]
+        g_mo   = C @ np.diag(1/(1j*w+mu-mo_energy)) @ C.conj().T
+        g_fock = np.linalg.inv((1j*w+mu)*S - F)
+        print("high-ω |g_mo - g_fock|:", np.max(np.abs(g_mo - g_fock)))
+        
+    G_AO = np.zeros((niw, 1, 1, nao, nao), dtype=np.complex128)  
+    # for iw, w in enumerate(wgrid):
+    #     G_AO[iw, 0, 0] = np.linalg.inv((1j*w + mu)*S - F)
+
     G_diag = np.zeros((niw, nao), dtype=np.complex128)
     for i, e in enumerate(mo_energy):
         G_diag[:, i] = 1.0 / (wgrid * 1j + mu - e)
-    
-    G_AO = np.zeros((niw, 1, 1, nao, nao), dtype=np.complex128)  
     for iw in range(niw):
         G_AO[iw] += C @ np.diag(G_diag[iw, :]) @ C.conj().T
-    
+
     G_tau = irFT.omega2tauFTforG(G_AO, beta=beta, tau_h5=tau_h5)
     
     print("G_tau of initial HF/DFT reading finished.")
@@ -193,7 +210,7 @@ def eval_P0_tilde_Q_init(NQ, beta=1000,
     return P0_tilde
 
 
-def eval_P0_tilde_Q(iter, nao, NQ,
+def eval_P0_tilde_Q(iter, NQ,
                     int_path="df_hf_int/",
                     sim_h5="scgw/sim.h5"):
     """
@@ -208,6 +225,7 @@ def eval_P0_tilde_Q(iter, nao, NQ,
     num_tau = G_tau.shape[0]  # Number of tau points
     num_s = G_tau.shape[1]    # Number of spins
     num_k = G_tau.shape[2]    # Number of k-points
+    nao = G_tau.shape[3]      # Number of atomic orbitals
     P0_tilde = np.zeros((num_tau, num_s, num_k, NQ, NQ), dtype=np.complex128)
 
     print("*****     P0     *****")

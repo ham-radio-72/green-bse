@@ -93,7 +93,8 @@ Redirect to `script` and run `python solveCasida_main.py -h` to see the definiti
 - `calc_pi`: Calculate polarizability on the fly (default: `True`)
 - `qpac`: Use QP for *GW* energy levels (default: `True`)
 - `monitor`: Memory and parallelization monitoring (default: `True`)
-- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the lastest iteration). `iter` is for the Green's function and `iter_W` is for screened Coulomb iteraction. They should be the same, but two separate variables are defined for testing purposes. 
+- `iter` and `iter_W`: The iteration number to read from `sim.h5` (default: `-1` for the latest iteration). `iter` is for QP energy and `iter_W` is for screened Coulomb interaction. Use default options to calculate BSE@sc*GW* excitations.
+- In order to calculate BSE@*G*$_0$*W*$_0$ excitations, please use `iter=1` and `iter_W=0`. `iter=1` means to calculate QP energy from the self-energy of the first finished *GW* iteration. `iter_W=0` means to re-calculate *W*$_0$ from scratch because *W* is not stored in `sim.h5`. 
 - `n_jobs`: Number of threads to be used. (default: `-1` to use all threads available)
 - `output`: Output file containing excitation energies, eigenvectors, and fitted poles.
 
@@ -105,6 +106,7 @@ We have provided an example of dinitrogen molecule in the `STO-3G` basis set.
 It is a very small system that you can easily run on your desktop.
 In '/example/N2_STO3G', you can find all the referential outputs you needed from mean-field and sc*GW* calculations, as well as an IR grid file. 
 A BSE@sc*GW* calculation can be run using these files as inputs.
+Note that if you are generating your own input from `pyscf` and `green-mbpt`, the calculation must be restricted (`ns=1`).
 
 First, make sure your `python` environment satisfies the aforementioned dependency and download this `python` package.
 Redirect to `green-bse/example/N2_STO3G`, simply run the `bash` command line:

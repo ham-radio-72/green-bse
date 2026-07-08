@@ -164,8 +164,8 @@ def new_read_IR_matrices(ir_path, beta, ptype='fermi'):
 
     Ttc *= np.sqrt(2.0/beta)
     Tnc *= np.sqrt(beta)
-    Tct = np.linalg.inv(Ttc[1:-1])
-    Tcn = np.linalg.inv(Tnc)
+    Tct = np.linalg.pinv(Ttc[1:-1])
+    Tcn = np.linalg.pinv(Tnc)
 
     return tau_mesh, wsample, Ttc, Tcn, Tnc, Tct
 
@@ -198,8 +198,8 @@ def legacy_read_IR_matrices(ir_path, beta, ptype='fermi'):
 
     Ttc *= np.sqrt(2.0/beta)
     Tnc *= np.sqrt(beta)
-    Tct = np.linalg.inv(Ttc[1:-1])
-    Tcn = np.linalg.inv(Tnc)
+    Tct = np.linalg.pinv(Ttc[1:-1])
+    Tcn = np.linalg.pinv(Tnc)
 
     return tau_mesh, wsample, Ttc, Tcn, Tnc, Tct
 

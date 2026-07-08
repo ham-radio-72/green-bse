@@ -42,15 +42,14 @@ def getPtilde_init(nQ,beta=1000,
     P0 = gw.eval_P0_tilde_Q_init(nQ, beta=beta, 
                                  int_path=int_path, input_h5=input_h5, tau_h5=tau_h5)
     P0 = gw.symmetrize_P0(P0)
-    # It is on the tau axis. This is evaluated with the Dyson equation.
     Ptilde_init = gw.eval_P_tilde(P0, tau_h5=tau_h5)
 
     return Ptilde_init
 
 
-def getPtilde(iter,nao,nQ,tau_h5="1e5_120.h5", int_path="df_hf_int/", sim_h5="sim.h5"):
+def getPtilde(iter, nQ, tau_h5="1e5_120.h5", int_path="df_hf_int/", sim_h5="sim.h5"):
     # Compute P tilde from G and V.
-    P0 = gw.eval_P0_tilde_Q(iter, nao, nQ, int_path=int_path, sim_h5=sim_h5)
+    P0 = gw.eval_P0_tilde_Q(iter, nQ, int_path=int_path, sim_h5=sim_h5)
     P0 = gw.symmetrize_P0(P0)
     Ptilde = gw.eval_P_tilde(P0, tau_h5=tau_h5)
     # print("Ptilde shape:", Ptilde.shape)

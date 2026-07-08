@@ -387,7 +387,8 @@ def G2p(H2p,ir_file,beta=1000):
     return G2p
 
 
-def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2):
+def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, 
+                            nelec, ex_type, U1, U2, static_coupling=False, tda=False):
     """
     Helper function for HDyn process threading at each single frequency point.
     """
@@ -397,18 +398,38 @@ def _process_hdyn_frequency(iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_o
     W   = VPV + U1
     A   = matEleXiStat(VQ,W,nelec,ex_type)
     A   = diffEps_ov + A.reshape(occ*virt,occ*virt)
-    # PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal') 
-    PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,:occ,occ:], optimize='optimal') 
-    # ijkl: Nocc * Nvirt * Nocc * Nvirt
-    VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
-    W   = VPV + U2
-    B   = matEleBStat(VQ,W,nelec,ex_type)
-    B   = B.reshape(occ*virt,occ*virt)
-    H   = concatAB(A,B)
+    # PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,occ:,:occ], optimize='optimal')
+    
+    if tda:
+        if not static_coupling:
+            print("If TDA is enabled and static coupling must be used as well, overriding static_coupling to True")
+            static_coupling = True
+        B = np.zeros((occ*virt,occ*virt),dtype=np.complex128)
+        H   = concatAB(A,B)
+    
+    else: 
+        if not static_coupling:
+            # Fully dynamic coupling
+            PV  = np.einsum("qp,pkl->qkl", Pi[iw,0,:,:,0], VQ[0,:,:occ,occ:], optimize='optimal') 
+            # ijkl: Nocc * Nvirt * Nocc * Nvirt
+            VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
+        else: 
+            # Static dynamic coupling
+            niw = Pi.shape[0]
+            zero_freq = niw // 2
+            PV  = np.einsum("qp,pkl->qkl", Pi[zero_freq,0,:,:,0], VQ[0,:,:occ,occ:], optimize='optimal') 
+            # ijkl: Nocc * Nvirt * Nocc * Nvirt
+            VPV = np.einsum("qij,qkl->ijkl", VQ[0,:,:occ,occ:], PV, optimize='optimal')
+        W   = VPV + U2
+        B   = matEleBStat(VQ,W,nelec,ex_type)
+        B   = B.reshape(occ*virt,occ*virt)
+        H   = concatAB(A,B)
+
     return np.einsum('ij,jk,ki->i', effVex_inv, H, effVex)
 
 
-def HDynDiagApprox(Pi,effVex,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
+def HDynDiagApprox(Pi,effVex,VQ,valsMO,nelec,ex_type="singlet",
+                   n_jobs=-1,static_coupling=False,tda=False):
     """
     Diagonal approximation to the dynamic part of the 
     effective Hamiltonian H2p_Dyn at each frequency point.
@@ -425,11 +446,19 @@ def HDynDiagApprox(Pi,effVex,VQ,valsMO,nelec,ex_type="singlet",n_jobs=-1):
     virt = nao - occ
     U1   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,:occ], VQ[0,:,occ:,occ:], optimize='optimal')
     U2   = np.einsum('qij,qkl->ijkl', VQ[0,:,:occ,occ:], VQ[0,:,:occ,occ:], optimize='optimal')
+    if tda:
+        print("TDA approximation is enabled. Coupling block B will be zero.")
+        if not static_coupling:
+            print("If TDA is enabled and static coupling must be used as well, overriding static_coupling to True")
+            static_coupling = True
+    if static_coupling:
+        print("Static coupling is enabled. Coupling block B will be static.")
     # Diagonal approximation to H2p_Dyn at each frequency point.
     # Parallelize over frequency points
     results = Parallel(n_jobs=n_jobs, backend='threading')(
         delayed(_process_hdyn_frequency)(
-            iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, nelec, ex_type, U1, U2
+            iw, Pi, VQ, effVex_inv, effVex, occ, virt, diffEps_ov, 
+            nelec, ex_type, U1, U2, static_coupling, tda
         ) for iw in range(niw_half)
     )
     
