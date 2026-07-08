@@ -53,8 +53,8 @@ def find_mu_bisection(eps, Ne, beta, degeneracy=2, tol=1e-12, maxiter=200):
         if fleft * fright > 0:
             raise RuntimeError("Could not bracket root; check eps/Ne/T or units.")
 
-    mid = 0.0
     for _ in range(maxiter):
+        mid = 0.5 * (left + right)
         fmid = F(mid)
         if abs(fmid) < tol:
             return mid
@@ -65,7 +65,6 @@ def find_mu_bisection(eps, Ne, beta, degeneracy=2, tol=1e-12, maxiter=200):
             right, fright = mid, fmid
         else:
             left, fleft = mid, fmid
-        mid = 0.5 * (left + right)
     raise RuntimeError("Bisection did not converge within maxiter")
 
 
